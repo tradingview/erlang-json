@@ -1,0 +1,118 @@
+#! /usr/bin/env escript
+
+main([]) ->
+    eep0018:start_driver("."),
+    test_all().
+
+obj_new() ->
+    {[]}.
+
+is_obj({Props}) ->
+    F = fun ({K, _}) when is_binary(K) ->
+                true;
+            (_) ->
+                false
+        end,    
+    lists:all(F, Props).
+
+obj_from_list(Props) ->
+    Obj = {Props},
+    case is_obj(Obj) of
+        true -> Obj;
+        false -> exit({json_bad_object, Obj})
+    end.
+
+%% Test for equivalence of Erlang terms.
+%% Due to arbitrary order of construction, equivalent objects might
+%% compare unequal as erlang terms, so we need to carefully recurse
+%% through aggregates (tuples and objects).
+
+equiv({Props1}, {Props2}) ->
+    equiv_object(Props1, Props2);
+equiv(L1, L2) when is_list(L1), is_list(L2) ->
+    equiv_list(L1, L2);
+equiv(N1, N2) when is_number(N1), is_number(N2) -> N1 == N2;
+equiv(B1, B2) when is_binary(B1), is_binary(B2) -> B1 == B2;
+equiv(true, true) -> true;
+equiv(false, false) -> true;
+equiv(null, null) -> true.
+
+%% Object representation and traversal order is unknown.
+%% Use the sledgehammer and sort property lists.
+
+equiv_object(Props1, Props2) ->
+    L1 = lists:keysort(1, Props1),
+    L2 = lists:keysort(1, Props2),
+    Pairs = lists:zip(L1, L2),
+    true = lists:all(fun({{K1, V1}, {K2, V2}}) ->
+                             equiv(K1, K2) and equiv(V1, V2)
+                     end, Pairs).
+
+%% Recursively compare tuple elements for equivalence.
+
+equiv_list([], []) ->
+    true;
+equiv_list([V1 | L1], [V2 | L2]) ->
+    case equiv(V1, V2) of
+        true ->
+            equiv_list(L1, L2);
+        false ->
+            false
+    end.
+
+test_all() ->
+    [1199344435545.0, 1] = eep0018:json_to_term(<<"[1199344435545.0,1]">>),
+    test_one(e2j_test_vec(utf8), 1).
+
+test_one([], N) ->
+    io:format("~p tests passed~n", [N-1]),
+    ok;
+test_one([{E, J} | Rest], N) ->
+    io:format("[~p] ~p ~p~n", [N, E, J]),
+    true = equiv(E, eep0018:json_to_term(J)),
+    true = equiv(E, eep0018:json_to_term(eep0018:term_to_json(E))),
+    test_one(Rest, 1+N).
+
+e2j_test_vec(utf8) ->
+    [
+     {1, "1"},
+     {3.1416, "3.14160"}, %% text representation may truncate, trail zeroes
+     {-1, "-1"},
+     {-3.1416, "-3.14160"},
+     {12.0e10, "1.20000e+11"},
+     {1.234E+10, "1.23400e+10"},
+     {-1.234E-10, "-1.23400e-10"},
+     {10.0, "1.0e+01"},
+     {123.456, "1.23456E+2"},
+     {10.0, "1e1"},
+     {<<"foo">>, "\"foo\""},
+     {<<"foo", 5, "bar">>, "\"foo\\u0005bar\""},
+     {<<"">>, "\"\""},
+     {<<"\n\n\n">>, "\"\\n\\n\\n\""},
+     {<<"\" \b\f\r\n\t\"">>, "\"\\\" \\b\\f\\r\\n\\t\\\"\""},
+     {obj_new(), "{}"},
+     {obj_from_list([{<<"foo">>, <<"bar">>}]), "{\"foo\":\"bar\"}"},
+     {obj_from_list([{<<"foo">>, <<"bar">>}, {<<"baz">>, 123}]),
+      "{\"foo\":\"bar\",\"baz\":123}"},
+     {[], "[]"},
+     {[[]], "[[]]"},
+     {[1, <<"foo">>], "[1,\"foo\"]"},
+     
+     %% json array in a json object
+     {obj_from_list([{<<"foo">>, [123]}]),
+      "{\"foo\":[123]}"},
+     
+     %% json object in a json object
+     {obj_from_list([{<<"foo">>, obj_from_list([{<<"bar">>, true}])}]),
+      "{\"foo\":{\"bar\":true}}"},
+     
+     %% fold evaluation order
+     {obj_from_list([{<<"foo">>, []},
+                     {<<"bar">>, obj_from_list([{<<"baz">>, true}])},
+                     {<<"alice">>, <<"bob">>}]),
+      "{\"foo\":[],\"bar\":{\"baz\":true},\"alice\":\"bob\"}"},
+     
+     %% json object in a json array
+     {[-123, <<"foo">>, obj_from_list([{<<"bar">>, []}]), null],
+      "[-123,\"foo\",{\"bar\":[]},null]"}
+    ].

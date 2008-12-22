@@ -3,13 +3,8 @@
 #include <stdio.h>
 #include <erl_driver.h>
 
-int twice(int x){
-  return 2*x;
-}
-
-int sum(int x, int y){
-  return x+y;
-}
+int json_to_term(char* inBuf, char** retBuf, int retBufLen);
+int term_to_json(char* inBuf, char** retBuf, int retBufLen);
 
 typedef struct {
     ErlDrvPort port;
@@ -27,40 +22,46 @@ static void eep0018_drv_stop(ErlDrvData handle)
     driver_free((char*)handle);
 }
 
-static void eep0018_drv_output(ErlDrvData handle, char *buff, int buflen)
+static int eep0018_drv_control(ErlDrvData handle, unsigned int command, char* inBuf,
+        int inBufLen, char **retBuf, int retBufLen)
 {
-    eep0018_data* d = (eep0018_data*)handle;
-    char fn = buff[0], arg = buff[1], res;
-    if (fn == 1) {
-      res = twice(arg);
-    } else if (fn == 2) {
-      res = sum(buff[1], buff[2]);
+    //eep0018_data* pData = (eep0018_data*) handle;
+    switch(command) {
+    case 0: //json_to_term
+        return json_to_term(inBuf, retBuf, retBufLen);
+    case 1: //term_to_json
+        return term_to_json(inBuf, retBuf, retBufLen);
+    default:
+        return -1;
     }
-    else {
-      res = 3;
-    }
-    
-    driver_output(d->port, &res, 1);
 }
 
 ErlDrvEntry eep0018_driver_entry = {
-    NULL,               /* F_PTR init, N/A */
-    eep0018_drv_start,  /* L_PTR start, called when port is opened */
-    eep0018_drv_stop,   /* F_PTR stop, called when port is closed */
-    eep0018_drv_output, /* F_PTR output, called when erlang has sent
-			   data to the port */
-    NULL,               /* F_PTR ready_input, 
-                           called when input descriptor ready to read*/
-    NULL,               /* F_PTR ready_output, 
-                           called when output descriptor ready to write */
-    "eep0018_drv",     /* char *driver_name, the argument to open_port */
-    NULL,               /* F_PTR finish, called when unloaded */
-    NULL,               /* F_PTR control, port_command callback */
-    NULL,               /* F_PTR timeout, reserved */
-    NULL                /* F_PTR outputv, reserved */
+    NULL,                   /* F_PTR init, N/A */
+    eep0018_drv_start,      /* L_PTR start, called when port is opened */
+    eep0018_drv_stop,       /* F_PTR stop, called when port is closed */
+    NULL,                   /* F_PTR output, called when erlang has sent */
+    NULL,                   /* F_PTR ready_input, called when input descriptor ready */
+    NULL,                   /* F_PTR ready_output, called when output descriptor ready */
+    "eep0018_drv",          /* char *driver_name, the argument to open_port */
+    NULL,                   /* F_PTR finish, called when unloaded */
+    NULL,                   /* Not used */
+    eep0018_drv_control,    /* F_PTR control, port_command callback */
+    NULL,                   /* F_PTR timeout, reserved */
+    NULL,                   /* F_PTR outputv, reserved */
+    NULL,                   /* F_PTR ready_async */
+    NULL,                   /* F_PTR flush */
+    NULL,                   /* F_PTR call */
+    NULL,                   /* F_PTR event */
+    ERL_DRV_EXTENDED_MARKER,
+    ERL_DRV_EXTENDED_MAJOR_VERSION,
+    ERL_DRV_EXTENDED_MINOR_VERSION,
+    ERL_DRV_FLAG_USE_PORT_LOCKING,
+    NULL,                   /* Reserved -- Used by emulator internally */
+    NULL,                   /* F_PTR process_exit */
 };
 
-DRIVER_INIT(eep0018_drv) /* must match name in driver_entry */
+DRIVER_INIT(eep0018_drv)    /* must match name in driver_entry */
 {
     return &eep0018_driver_entry;
 }
