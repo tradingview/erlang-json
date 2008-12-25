@@ -9,13 +9,20 @@ json_to_term(Json) when is_list(Json) ->
     json_to_term(list_to_binary(Json));
 json_to_term(Json) when is_binary(Json) ->
     Port = drv_port(),
-    Resp = erlang:port_control(Port, 1, <<Json/binary, 0:8>>),
-    binary_to_term(list_to_binary(Resp)).
+    erlang:port_control(Port, 1, <<Json/binary, 0:8>>),
+    receive
+    {Port, {data, Bin}} ->
+        binary_to_term(list_to_binary(Bin))
+    end.
 
 term_to_json(Term) ->
     Bin = term_to_binary(Term),
     Port = drv_port(),
-    erlang:port_control(Port, 2, Bin).
+    erlang:port_control(Port, 2, Bin),
+    receive
+    {Port, {data, Json}} ->
+        Json
+    end.
 
 % Implementation
 

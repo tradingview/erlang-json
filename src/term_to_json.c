@@ -1,9 +1,5 @@
-#include <stdlib.h>
 
-#include <erl_driver.h>
-#include <ei.h>
-
-#include <yajl/yajl_gen.h>
+#include "eep0018.h"
 
 #ifndef WIN32
 #include <string.h>
@@ -29,13 +25,41 @@ int value_to_json(char* buf, int* index, yajl_gen handle);
 int
 binary_to_json(char* buf, int* index, yajl_gen handle)
 {
+    
     int type, size;
-    ei_get_type(buf, index, &type, &size);
+    if(ei_get_type(buf, index, &type, &size)) return ERROR;
     if(type != BINARY) return ERROR;
     *index += 5;
     if(yajl_gen_string(handle, (unsigned char*) buf+*index, size)) return ERROR;
     *index += size;
     return OK;
+}
+
+int
+key_to_json(char* buf, int* index, yajl_gen handle)
+{
+    char data[MAXATOMLEN];
+    int type, size;
+    if(ei_get_type(buf, index, &type, &size)) return ERROR;
+    if(type == BINARY)
+    {
+        return binary_to_json(buf, index, handle);
+    }
+    else if(type == ATOM)
+    {
+        if(ei_decode_atom(buf, index, data)) return ERROR;
+        if(yajl_gen_string(handle, (unsigned char*) data, size)) return ERROR;
+        return OK;
+    }
+    else if(type == STRING)
+    {
+        *index += 3;
+        if(yajl_gen_string(handle, (unsigned char*) buf+*index, size)) return ERROR;
+        *index += size;
+        return OK;
+    }
+    
+    return ERROR;
 }
 
 int
@@ -73,7 +97,12 @@ atom_to_json(char* buf, int* index, yajl_gen handle)
     {
         if(yajl_gen_null(handle)) return ERROR;
     }
-
+    else
+    {
+        // Matching the old semantics.
+        if(yajl_gen_string(handle, (unsigned char*) data, size)) return ERROR;
+    }
+    
     return OK;
 }
 
@@ -91,7 +120,7 @@ map_to_json(char* buf, int* index, yajl_gen handle)
     {
         if(ei_decode_tuple_header(buf, index, &size)) return ERROR;
         if(size != 2) return ERROR;
-        if(binary_to_json(buf, index, handle)) return ERROR;
+        if(key_to_json(buf, index, handle)) return ERROR;
         if(value_to_json(buf, index, handle)) return ERROR;
     }
 
@@ -178,42 +207,27 @@ value_to_json(char* buf, int* index, yajl_gen handle)
     }
 }
 
-int
-term_to_json(char* buf, char** retBuf, int retBufLen)
+void
+term_to_json(void* ctx)
 {
     // Setup generation handle
-    int index = 0;
+    eep0018_data* st = (eep0018_data*) ctx;
     int version;
-    unsigned int length = 0;
-    unsigned char* outBuf;
+    int index = 0;
     yajl_gen_config conf = {0, NULL};
-    yajl_gen handle = yajl_gen_alloc(&conf);
+    st->ghandle = yajl_gen_alloc(&conf);
 
-    if(ei_decode_version(buf, &index, &version)) return -1;
-    
-    if(value_to_json(buf, &index, handle))
+    if(ei_decode_version(st->bin->orig_bytes, &index, &version))
     {
-        yajl_gen_free(handle);
-        return -1;
+        st->result = ERROR;
+        return;
     }
-   
-
-    if(yajl_gen_get_buf(handle, (const unsigned char**) &outBuf, &length))
+    else if(value_to_json(st->bin->orig_bytes, &index, st->ghandle))
     {
-        yajl_gen_free(handle);
-        return -1;
+        st->result = ERROR;
     }
-    
-    if(*retBuf == NULL || length > retBufLen)
+    else
     {
-        (*retBuf) = (char*) driver_alloc_binary(length);
-        if(*retBuf == NULL)
-        {
-            return -1;
-        }
+        st->result = OK;
     }
-    
-    memcpy(*retBuf, outBuf, length);
-    yajl_gen_free(handle);
-    return length;
 }

@@ -1,68 +1,46 @@
+
 #
-# The erlang source dir
+# These will most likely need to be adjusted for your install.
+#
 OTPROOT=/usr/local/lib/erlang
-
-
-#
-# The yajl dir
-YAJLROOT=yajl
-
-#
-# The erlang interface dir
 EIROOT=$(OTPROOT)/lib/erl_interface-3.5.8
-ERTSROOT=$(OTPROOT)//erts-5.6.4
-
+ERTSROOT=$(OTPROOT)/erts-5.6.4
 
 #
-# -----------------------------------------------------------------------------
-ERLANG_INCLUDES=-I$(OTPROOT)/usr/include/
-# ERLANG_LIBS=-L$(OTPROOT)/usr/lib/ -lerts
+# Should be good below here for OS X at least.
+#
+INCLUDES = -I$(OTPROOT)/usr/include/
+INCLUDES += -I$(EIROOT)/include
 
-EI_INCLUDES=-I $(EIROOT)/include -I $(EIROOT)/src/misc
-EI_LIBS=-L$(EIROOT)/lib -lerl_interface -lei
+LIBS = -L$(EIROOT)/lib -lerl_interface -lei
 
-# ./usr/include/
-# -----------------------------------------------------------------------------
+GCCFLAGS = -fPIC -bundle -flat_namespace -undefined suppress -fno-common -Wall
+CFLAGS = $(GCCFLAGS) $(INCLUDES)
+LDFLAGS = $(GCCFLAGS) $(LIBS)
 
-GCCFLAGS=-fPIC -bundle -flat_namespace -undefined suppress -fno-common -Wall
-
-CFLAGS=$(GCCFLAGS) -I include $(ERLANG_INCLUDES) $(EI_INCLUDES)
-LFLAGS=$(GCCFLAGS) $(ERLANG_LIBS) $(EI_LIBS)
-
-ERLCFLAGS=
-
-# -- objects -------------------------------------------------------------------
-
-VPATH=src:$(YAJLROOT)/src
-
-YAJL_OBJECTS=yajl.o yajl_encode.o yajl_lex.o yajl_buf.o yajl_gen.o yajl_parser.o
-EEP_OBJECTS=json_to_term.o term_to_json.o eep0018.o
-# EEP_OBJECTS=eep0018.o
-
-PATHS=include include/yajl
+OBJECTS = \
+	src/eep0018.o \
+	src/json_to_term.o \
+	src/term_to_json.o \
+	src/yajl.o \
+	src/yajl_encode.o \
+	src/yajl_lex.o \
+	src/yajl_buf.o \
+	src/yajl_gen.o \
+	src/yajl_parser.o
 
 DRIVER=eep0018_drv.so
 BEAM=eep0018.beam
 
 # -- rules --------------------------------------------------------------------
 
-all: include include/yajl driver beam
+all: $(DRIVER) $(BEAM)
 
 clean: 
-	rm -rf include *.o $(DRIVER) $(BEAM)
+	rm -rf *.o $(DRIVER) $(BEAM)
 
-include: 
-	mkdir include
+$(BEAM): src/eep0018.erl
+	erlc $^
 
-include/yajl: 
-	ln -sf ../yajl/src/api include/yajl
-
-beam: $(BEAM)
-
-eep0018.beam: eep0018.erl
-	$(OTPROOT)/bin/erlc $^ $(ERLCFLAGS)
-
-driver: $(DRIVER)
-
-eep0018_drv.so: $(YAJL_OBJECTS) $(EEP_OBJECTS)
-	gcc -o $@ $^ $(LFLAGS)
+$(DRIVER): $(OBJECTS)
+	gcc -o $@ $^ $(LDFLAGS)

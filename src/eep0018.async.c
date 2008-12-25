@@ -43,19 +43,17 @@ eep0018_free(void* ctx)
 static int
 eep0018_control(ErlDrvData drv_data, unsigned int command, char* buf, int len, char **rbuf, int rlen)
 {
-    const unsigned char* json;
-    unsigned int jlen;
-
+    ErlDrvPort port = (ErlDrvPort) drv_data;
     if(command < 1 || command > 2)
     {
-        //eep0018_error(port, "invalid_command");
+        eep0018_error(port, "invalid_command");
         return -1;
     }
 
     eep0018_data* ctx = (eep0018_data*) driver_alloc(sizeof(eep0018_data));
     if(ctx == NULL)
     {
-        //eep0018_error(port, "no_memmory");
+        eep0018_error(port, "no_memmory");
         return -1;
     }
 
@@ -66,47 +64,55 @@ eep0018_control(ErlDrvData drv_data, unsigned int command, char* buf, int len, c
     if(ctx->bin == NULL)
     {
         driver_free(ctx);
-        //eep0018_error(port, "no_memmory");
+        eep0018_error(port, "no_memmory");
         return -1;
     }
     memcpy(ctx->bin->orig_bytes, buf, len);
     
     if(ctx->direction == 1)
     {
-        json_to_term(ctx);
+        driver_async(port, NULL, json_to_term, ctx, eep0018_free);
     }
     else
     {
-        term_to_json(ctx);
+        driver_async(port, NULL, term_to_json, ctx, eep0018_free); 
     }
+
+    *rbuf = NULL;
+    return 0;
+}
+
+static void
+eep0018_ready_async(ErlDrvData drv_data, ErlDrvThreadData async_data)
+{
+    const unsigned char* buf;
+    unsigned int length;
+    ErlDrvPort port = (ErlDrvPort) drv_data;
+    eep0018_data* ctx = (eep0018_data*) async_data;
     
     if(ctx->result != OK)
     {
-        //eep0018_error(port, "json_error");
+        eep0018_error(port, "json_error");
         eep0018_free(ctx);
-        return -1;
+        return;
     }
 
     if(ctx->direction == 1)
     {
-        *rbuf = driver_alloc(ctx->buf.index);
-        memcpy(*rbuf, ctx->buf.buff, ctx->buf.index);
-        eep0018_free(ctx);
-        return ctx->buf.index;
+        driver_output(port, ctx->buf.buff, ctx->buf.index);
     }
     else
     {
-        if(yajl_gen_get_buf(ctx->ghandle, &json, &jlen))
+        if(yajl_gen_get_buf(ctx->ghandle, &buf, &length))
         {
-            //eep0018_error(port, "gen_buf_error");
+            eep0018_error(port, "gen_buf_error");
             eep0018_free(ctx);
-            return -1;
+            return;
         }
-        *rbuf = driver_alloc(jlen);
-        memcpy(*rbuf, json, jlen);
-        eep0018_free(ctx);
-        return jlen;
+        driver_output(port, buf, length);
     }
+
+    eep0018_free(ctx);
 }
 
 static ErlDrvEntry
@@ -124,16 +130,10 @@ eep0018_driver_entry =
     eep0018_control,
     NULL,               /* Timeout */
     NULL,               /* Outputv */
-    NULL,               /* Ready Async */
+    eep0018_ready_async,
     NULL,               /* Flush */
     NULL,               /* Call */
-    NULL,               /* Event */
-    ERL_DRV_EXTENDED_MARKER,
-    ERL_DRV_EXTENDED_MAJOR_VERSION,
-    ERL_DRV_EXTENDED_MINOR_VERSION,
-    ERL_DRV_FLAG_USE_PORT_LOCKING,
-    NULL,               /* Reserved */
-    NULL,               /* Process Exit */
+    NULL                /* Event */
 };
 
 DRIVER_INIT(eep0018_drv)    /* must match name in driver_entry */
