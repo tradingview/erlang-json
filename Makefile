@@ -22,6 +22,7 @@ OBJECTS = \
 	src/eep0018.o \
     src/ei_bin_buf.o \
 	src/json_to_term.o \
+    src/term_buf.o \
 	src/term_to_json.o \
 	src/yajl.o \
 	src/yajl_encode.o \

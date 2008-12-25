@@ -87,8 +87,23 @@ test_one(_, _, [], _N) ->
     ok;
 test_one(Encode, Decode, [{E, J} | Rest], N) ->
     %io:format("[~p] ~p ~p~n", [N, E, J]),
-    true = equiv(E, Decode(J)),
-    true = equiv(E, Decode(Encode(E))),
+    DJ = Decode(J),
+    ok = case equiv(E, Decode(J)) of
+    false ->
+        io:format("~p != ~p~n", [E, DJ]),
+        error;
+    true ->
+        ok
+    end,
+    
+    DEJ = Decode(Encode(E)),
+    ok = case equiv(E, DEJ) of
+    false ->
+        io:format("~p != ~p~n", [E, DEJ]),
+        error;
+    true ->
+        ok
+    end,
     test_one(Encode, Decode, Rest, 1+N).
 
 e2j_test_vec(utf8) ->
@@ -133,5 +148,8 @@ e2j_test_vec(utf8) ->
      
      %% json object in a json array
      {[-123, <<"foo">>, obj_from_list([{<<"bar">>, []}]), null],
-      "[-123,\"foo\",{\"bar\":[]},null]"}
+      "[-123,\"foo\",{\"bar\":[]},null]"},
+
+     %% Unicode characters
+     {<<"¡üé">>, "\"\\u00A1\\u00FC\\u00E9\""}
     ].

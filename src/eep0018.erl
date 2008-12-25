@@ -5,17 +5,21 @@
 
 % Public API
 
+term_to_json(Term) ->
+    Bin = term_to_binary(Term),
+    erlang:port_control(drv_port(), 0, Bin).
+
 json_to_term(Json) when is_list(Json) ->
     json_to_term(list_to_binary(Json));
 json_to_term(Json) when is_binary(Json) ->
     % The null byte is important for bare literals. Without it
     % yajl will throw a fit because it doesn't think it's finished
     % parsing correctly.
-    erlang:port_call(drv_port(), 0, <<Json/binary, 0:8>>).
-
-term_to_json(Term) ->
-    Bin = term_to_binary(Term),
-    erlang:port_control(drv_port(), 0, Bin).
+    [] = erlang:port_control(drv_port(), 1, <<Json/binary, 0:8>>),
+    receive
+    Term ->
+        Term
+    end.
 
 % Implementation
 

@@ -19,21 +19,15 @@ eep0018_control(
         char **rbuf,
         int rlen)
 {
-    return term_to_json(buf, len, rbuf, rlen);
-}
-
-static int
-eep0018_call(
-        ErlDrvData drv_data,
-        unsigned int command,
-        char* buf,
-        int len,
-        char** rbuf,
-        int rlen,
-        unsigned int* flags
-)
-{
-    return json_to_term(buf, len, rbuf, rlen);
+    switch(command)
+    {
+        case 0:
+            return term_to_json(buf, len, rbuf, rlen);
+        case 1:
+            return json_to_term((ErlDrvPort) drv_data, buf, len, rbuf, rlen);
+        default:
+            return -1;
+    }
 }
 
 static ErlDrvEntry
@@ -53,7 +47,7 @@ eep0018_driver_entry =
     NULL,               /* Outputv */
     NULL,               /* Ready Async */
     NULL,               /* Flush */
-    eep0018_call,
+    NULL,               /* Call */
     NULL,               /* Event */
     ERL_DRV_EXTENDED_MARKER,
     ERL_DRV_EXTENDED_MAJOR_VERSION,
