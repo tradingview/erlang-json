@@ -31,16 +31,26 @@ OBJECTS = \
 
 DRIVER=eep0018_drv.so
 BEAM=eep0018.beam
+TESTING=runner.beam mochijson2.beam mochinum.beam
 
 # -- rules --------------------------------------------------------------------
 
-all: $(DRIVER) $(BEAM)
+all: $(DRIVER) $(BEAM) $(TESTING)
 
 clean: 
-	rm -rf *.o $(DRIVER) $(BEAM)
+	rm -rf src/*.o *.beam $(DRIVER)
+
+$(DRIVER): $(OBJECTS)
+	gcc -o $@ $^ $(LDFLAGS)
 
 $(BEAM): src/eep0018.erl
 	erlc $^
 
-$(DRIVER): $(OBJECTS)
-	gcc -o $@ $^ $(LDFLAGS)
+$(TESTING): erl/runner.erl erl/mochijson2.erl erl/mochinum.erl
+	erlc erl/runner.erl
+	erlc erl/mochijson2.erl
+	erlc erl/mochinum.erl
+
+tests: $(DRIVER) $(BEAM) $(TESTING)
+	erl -noshell -s runner main
+

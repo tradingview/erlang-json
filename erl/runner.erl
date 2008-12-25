@@ -1,8 +1,27 @@
-#! /usr/bin/env escript
+-module(runner).
+-export([main/0]).
 
-main([]) ->
+main() ->
     eep0018:start_driver("."),
-    test_all().
+    run("eep0018", fun eep0018:term_to_json/1, fun eep0018:json_to_term/1, 1000),
+    run("mochijson2", fun mochijson2:encode/1, fun mochijson2:decode/1, 1000),
+    init:stop().
+
+run(Name, Encode, Decode, Num) ->
+    Start = micro(),
+    repeat(Encode, Decode, Num),
+    End = micro(),
+    io:format("~p: ~p~n", [Name, (End-Start)/1000000]).
+
+repeat(_, _, 0) ->
+    ok;
+repeat(Encode, Decode, N) ->
+    test_all(Encode, Decode),
+    repeat(Encode, Decode, N-1).
+
+micro() ->
+    {Mega, Secs, Micro} = erlang:now(),
+    (Mega * 1000000 + Secs) * 1000000 + Micro.
 
 obj_new() ->
     {[]}.
@@ -60,21 +79,21 @@ equiv_list([V1 | L1], [V2 | L2]) ->
             false
     end.
 
-test_all() ->
-    [1199344435545.0, 1] = eep0018:json_to_term(<<"[1199344435545.0,1]">>),
-    test_one(e2j_test_vec(utf8), 1).
+test_all(Encode, Decode) ->
+    test_one(Encode, Decode, e2j_test_vec(utf8), 1).
 
-test_one([], N) ->
-    io:format("~p tests passed~n", [N-1]),
+test_one(_, _, [], _N) ->
+    %io:format("~p tests passed~n", [N-1]),
     ok;
-test_one([{E, J} | Rest], N) ->
-    io:format("[~p] ~p ~p~n", [N, E, J]),
-    true = equiv(E, eep0018:json_to_term(J)),
-    true = equiv(E, eep0018:json_to_term(eep0018:term_to_json(E))),
-    test_one(Rest, 1+N).
+test_one(Encode, Decode, [{E, J} | Rest], N) ->
+    %io:format("[~p] ~p ~p~n", [N, E, J]),
+    true = equiv(E, Decode(J)),
+    true = equiv(E, Decode(Encode(E))),
+    test_one(Encode, Decode, Rest, 1+N).
 
 e2j_test_vec(utf8) ->
     [
+     {[1199344435545.0, 1], "[1199344435545.0,1]"},
      {1, "1"},
      {3.1416, "3.14160"}, %% text representation may truncate, trail zeroes
      {-1, "-1"},
