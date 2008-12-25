@@ -181,6 +181,8 @@ json_to_term(char* buf, int len, char** rbuf, int rlen)
         msg = yajl_get_error(handle, 0, NULL, 0);
         fprintf(stderr, "ERROR: %s\r\n", msg);
         yajl_free_error(msg);
+        yajl_free(handle);
+        ei_bin_buf_close(st.buf, 1);
         return -1;
     }
 
