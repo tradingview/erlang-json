@@ -16,10 +16,6 @@
 #define BINARY      109
 #define VERSION     131
 
-//Matching the other libraries
-#define ERROR 1
-#define OK 0
-
 int value_to_json(char* buf, int* index, yajl_gen handle);
 
 int
@@ -207,27 +203,27 @@ value_to_json(char* buf, int* index, yajl_gen handle)
     }
 }
 
-void
-term_to_json(void* ctx)
+int
+term_to_json(char* buf, int len, char** rbuf, int rlen)
 {
-    // Setup generation handle
-    eep0018_data* st = (eep0018_data*) ctx;
     int version;
     int index = 0;
     yajl_gen_config conf = {0, NULL};
-    st->ghandle = yajl_gen_alloc(&conf);
-
-    if(ei_decode_version(st->bin->orig_bytes, &index, &version))
+    yajl_gen handle = yajl_gen_alloc(&conf);
+    
+    if(ei_decode_version(buf, &index, &version))
     {
-        st->result = ERROR;
-        return;
+        return -1;
     }
-    else if(value_to_json(st->bin->orig_bytes, &index, st->ghandle))
+    else if(value_to_json(buf, &index, handle))
     {
-        st->result = ERROR;
+        return -1;
     }
     else
     {
-        st->result = OK;
+        *rbuf = (char*) yajl_gen_get_buf(handle);
+        index = yajl_gen_get_buf(handle)->orig_size;
+        yajl_gen_free(handle);
+        return index;
     }
 }

@@ -14,12 +14,13 @@ INCLUDES += -I$(EIROOT)/include
 
 LIBS = -L$(EIROOT)/lib -lerl_interface -lei
 
-GCCFLAGS = -fPIC -bundle -flat_namespace -undefined suppress -fno-common -Wall
+GCCFLAGS = -O3 -fPIC -bundle -flat_namespace -undefined suppress -fno-common -Wall
 CFLAGS = $(GCCFLAGS) $(INCLUDES)
 LDFLAGS = $(GCCFLAGS) $(LIBS)
 
 OBJECTS = \
 	src/eep0018.o \
+    src/ei_bin_buf.o \
 	src/json_to_term.o \
 	src/term_to_json.o \
 	src/yajl.o \

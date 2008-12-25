@@ -45,7 +45,7 @@ static void CharToHex(unsigned char c, char * hexBuf)
 }
 
 void
-yajl_string_encode(yajl_buf buf, const unsigned char * str,
+yajl_string_encode(ei_bin_buf* buf, const unsigned char * str,
                    unsigned int len)
 {
     unsigned int beg = 0;
@@ -73,14 +73,14 @@ yajl_string_encode(yajl_buf buf, const unsigned char * str,
                 break;
         }
         if (escaped != NULL) {
-            yajl_buf_append(buf, str + beg, end - beg);
-            yajl_buf_append(buf, escaped, strlen(escaped));
+            ei_bin_buf_append(buf, str + beg, end - beg);
+            ei_bin_buf_append(buf, escaped, strlen(escaped));
             beg = ++end;
         } else {
             ++end;
         }
     }
-    yajl_buf_append(buf, str + beg, end - beg);
+    ei_bin_buf_append(buf, str + beg, end - beg);
 }
 
 static void hexToDigit(unsigned int * val, const unsigned char * hex)

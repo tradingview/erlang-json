@@ -8,14 +8,14 @@
 json_to_term(Json) when is_list(Json) ->
     json_to_term(list_to_binary(Json));
 json_to_term(Json) when is_binary(Json) ->
-    Port = drv_port(),
-    Resp = erlang:port_control(Port, 1, <<Json/binary, 0:8>>),
-    binary_to_term(list_to_binary(Resp)).
+    % The null byte is important for bare literals. Without it
+    % yajl will throw a fit because it doesn't think it's finished
+    % parsing correctly.
+    erlang:port_call(drv_port(), 0, <<Json/binary, 0:8>>).
 
 term_to_json(Term) ->
     Bin = term_to_binary(Term),
-    Port = drv_port(),
-    erlang:port_control(Port, 2, Bin).
+    erlang:port_control(drv_port(), 0, Bin).
 
 % Implementation
 
@@ -33,7 +33,7 @@ start_driver(LibDir) ->
 drv_port() ->
     case get(eep0018_drv_port) of
     undefined ->
-        Port = open_port({spawn, "eep0018_drv"}, []),
+        Port = open_port({spawn, "eep0018_drv"}, [binary]),
         put(eep0018_drv_port, Port),
         Port;
     Port ->

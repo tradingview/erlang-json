@@ -15,24 +15,7 @@
 
 #define MAX_DEPTH   1024
 
-void json_to_term(void* ctx);
-void term_to_json(void* ctx);
-
-typedef struct
-{
-    int                 direction;  // 1: JSON -> ERLANG, 2: ERLANG -> JSON
-    int                 result;
-
-    ErlDrvBinary*       bin;
-    
-    //ERLANG -> JSON
-    yajl_gen            ghandle;
-
-    //JSON -> ERLANG
-    ei_x_buff           buf;
-    yajl_handle         phandle;
-    int                 state[MAX_DEPTH];
-    int                 depth;
-} eep0018_data;
+int json_to_term(char* buf, int len, char** rbuf, int rlen);
+int term_to_json(char* buf, int len, char** rbuf, int rlen);
 
 #endif
