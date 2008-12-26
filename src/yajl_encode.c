@@ -122,7 +122,7 @@ static void Utf32toUtf8(unsigned int codepoint, char * utf8Buf)
 }
 
 unsigned int
-yajl_string_decode(yajl_buf buf, unsigned char * str,
+yajl_string_decode(yajl_buf buf, const unsigned char * str,
                         unsigned int len)
 {
     unsigned int ins = 0;

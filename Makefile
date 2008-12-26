@@ -1,20 +1,24 @@
 
-#
 # These will most likely need to be adjusted for your install.
-#
-OTPROOT=/usr/local/lib/erlang
-EIROOT=$(OTPROOT)/lib/erl_interface-3.5.8
-ERTSROOT=$(OTPROOT)/erts-5.6.4
 
-#
-# Should be good below here for OS X at least.
-#
+# R12B-2: erl_interface-3.5.6, erts-5.6.2
+# R12B-4: erl_interface-3.5.8, erts-5.6.4
+
+OTPROOT=/usr/local/lib/erlang
+EIROOT=$(OTPROOT)/lib/erl_interface-3.5.6
+ERTSROOT=$(OTPROOT)/erts-5.6.2
+
 INCLUDES = -I$(OTPROOT)/usr/include/
 INCLUDES += -I$(EIROOT)/include
 
 LIBS = -L$(EIROOT)/lib -lerl_interface -lei
 
-GCCFLAGS = -O3 -fPIC -bundle -flat_namespace -undefined suppress -fno-common -Wall
+# OS X flags.
+# GCCFLAGS = -O3 -fPIC -bundle -flat_namespace -undefined suppress -fno-common -Wall
+
+#Linux Flags
+GCCFLAGS = -O3 -fPIC -shared -fno-common -Wall
+
 CFLAGS = $(GCCFLAGS) $(INCLUDES)
 LDFLAGS = $(GCCFLAGS) $(LIBS)
 
