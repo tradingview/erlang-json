@@ -9,132 +9,177 @@
 #define YAJL_OK 1
 #define YAJL_ERROR 0
 
-#define CHECK_CALL(CALL) if((CALL)) return YAJL_ERROR;
-
 typedef struct
 {
-    term_buf*   buf;
-    int         state[MAX_DEPTH];
-    int         depth;
+    ErlDrvPort      port;
+    ErlDrvTermData  pid;
+
+    // States
+    ErlDrvTermData  value;
+    ErlDrvTermData  map_open;
+    ErlDrvTermData  map_close;
+    ErlDrvTermData  map_key;
+    ErlDrvTermData  list_open;
+    ErlDrvTermData  list_close;
+    ErlDrvTermData  finished;
+    ErlDrvTermData  error;
+    
+    // Stored atoms
+    ErlDrvTermData  atom_null;
+    ErlDrvTermData  atom_true;
+    ErlDrvTermData  atom_false;
 } State;
 
-static State*
-prepare(void* ctx)
+inline void
+init_state(ErlDrvPort port, State* st)
 {
-    State* st = (State*) ctx;
+    st->port = port;
+    st->pid = driver_caller(port);
 
-    if(st->depth > 0 && st->state[st->depth] >= 0)
-    {
-        st->state[st->depth]++;
-    }
+    st->value = driver_mk_atom("value");
+    st->map_open = driver_mk_atom("map_open");
+    st->map_close = driver_mk_atom("map_close");
+    st->map_key = driver_mk_atom("map_key");
+    st->list_open = driver_mk_atom("list_open");
+    st->list_close = driver_mk_atom("list_close");
+    st->finished = driver_mk_atom("finished");
+    st->error = driver_mk_atom("error");
 
-    return st;
+    st->atom_null = driver_mk_atom("null");
+    st->atom_true = driver_mk_atom("true");
+    st->atom_false = driver_mk_atom("false");
 }
 
-static int
-finish(State* st)
+inline int
+output_term(State* st, ErlDrvTermData* spec, int len)
 {
-    if(st->depth > 0 && st->state[st->depth] < 0)
-    {
-        CHECK_CALL(term_buf_tuple(st->buf, 2));
-        st->depth--;
-    }
+    int resp = driver_output_term(st->port, spec, len);
+    return resp == 1 ? YAJL_OK : YAJL_ERROR;
+}
 
-    return YAJL_OK;
+int
+output_error(State* st, unsigned char* mesg)
+{
+    ErlDrvTermData spec[] = {
+        ERL_DRV_ATOM, st->error,
+        ERL_DRV_BUF2BINARY, (ErlDrvTermData) mesg, strlen((char*) mesg),
+        ERL_DRV_TUPLE, 2
+    };
+    return driver_output_term(st->port, spec, 7);
 }
 
 static int
 erl_json_null(void* ctx)
 {
-    State* st = prepare(ctx);
-    CHECK_CALL(term_buf_null(st->buf));
-    return finish(st);
+    State* st = (State*) ctx;
+    ErlDrvTermData spec[] = {
+        ERL_DRV_ATOM, st->value,
+        ERL_DRV_ATOM, st->atom_null,
+        ERL_DRV_TUPLE, 2
+    };
+    return output_term(st, spec, 6);
 }
 
 static int
 erl_json_boolean(void* ctx, int boolVal)
 {
-    State* st = prepare(ctx);
+    State* st = (State*) ctx;
+    ErlDrvTermData atom = boolVal ? st->atom_true : st->atom_false ;
     
-    if(boolVal)
-    {
-        CHECK_CALL(term_buf_true(st->buf));
-    }
-    else
-    {
-        CHECK_CALL(term_buf_false(st->buf));
-    }
-
-    return finish(st);
+    ErlDrvTermData spec[] = {
+        ERL_DRV_ATOM, st->value,
+        ERL_DRV_ATOM, atom,
+        ERL_DRV_TUPLE, 2
+    };
+    return output_term(st, spec, 6);
 }
 
 static int
 erl_json_long(void* ctx, long val)
 {
-    State* st = prepare(ctx);
-    CHECK_CALL(term_buf_int(st->buf, val));
-    return finish(st);
+    State* st = (State*) ctx;
+    ErlDrvTermData spec[] = {
+        ERL_DRV_ATOM, st->value,
+        ERL_DRV_INT,  (ErlDrvSInt) val,
+        ERL_DRV_TUPLE, 2
+    };
+    return output_term(st, spec, 6);
 }
 
 static int
 erl_json_double(void* ctx, double val)
 {
-    State* st = prepare(ctx);
-    CHECK_CALL(term_buf_double(st->buf, val));
-    return finish(st);
+    State* st = (State*) ctx;
+    ErlDrvTermData spec[] = {
+        ERL_DRV_ATOM, st->value,
+        ERL_DRV_FLOAT, (ErlDrvTermData) &val,
+        ERL_DRV_TUPLE, 2
+    };
+    return output_term(st, spec, 6);
 }
 
 static int
 erl_json_string(void* ctx, const unsigned char * stringVal, unsigned int stringLen)
 {
-    State* st = prepare(ctx);
-    CHECK_CALL(term_buf_binary(st->buf, stringVal, stringLen));
-    return finish(st);
+    State* st = (State*) ctx;
+    ErlDrvTermData spec[] = {
+        ERL_DRV_ATOM, st->value,
+        ERL_DRV_BUF2BINARY, (ErlDrvTermData) stringVal, (ErlDrvUInt) stringLen,
+        ERL_DRV_TUPLE, 2
+    };
+    return output_term(st, spec, 7);
 }
  
 static int
 erl_json_start_map(void* ctx)
 {
-    // {"foo": 1} -> {[{<<"foo">>, 1}]}
-    State* st = prepare(ctx);
-    st->state[++st->depth] = 0;
-    return YAJL_OK;
+    State* st = (State*) ctx;
+    ErlDrvTermData spec[] = {
+        ERL_DRV_ATOM, st->map_open
+    };
+    return output_term(st, spec, 2);
 }
 
 static int
 erl_json_end_map(void* ctx)
 {
     State* st = (State*) ctx;
-    //Close the list of two tuples
-    CHECK_CALL(term_buf_list(st->buf, st->state[st->depth--]));
-    //Close the 1 tuple enclosure
-    CHECK_CALL(term_buf_tuple(st->buf, 1));
-    return finish(st);
+    ErlDrvTermData spec[] = {
+        ERL_DRV_ATOM, st->map_close
+    };
+    return output_term(st, spec, 2);
 }
 
 static int
 erl_json_map_key(void* ctx, const unsigned char* keyVal, unsigned int keyLen)
 {
-    State* st = prepare(ctx);
-    st->state[++st->depth] = -1;
-    CHECK_CALL(term_buf_binary(st->buf, keyVal, keyLen));
-    return YAJL_OK;
+    State* st = (State*) ctx;
+    ErlDrvTermData spec[] = {
+        ERL_DRV_ATOM, st->map_key,
+        ERL_DRV_BUF2BINARY, (ErlDrvTermData) keyVal, (ErlDrvUInt) keyLen,
+        ERL_DRV_TUPLE, 2
+    };
+    return output_term(st, spec, 7);
 }
 
 static int
 erl_json_start_array(void* ctx)
 {
-    State* st = prepare(ctx);
-    st->state[++st->depth] = 0;
-    return YAJL_OK;
+    State* st = (State*) ctx;
+    ErlDrvTermData spec[] = {
+        ERL_DRV_ATOM, st->list_open,
+    };
+    return output_term(st, spec, 2);
 }
 
 static int
 erl_json_end_array(void* ctx)
 {
     State* st = (State*) ctx;
-    CHECK_CALL(term_buf_list(st->buf, st->state[st->depth--]));
-    return finish(st);
+    ErlDrvTermData spec[] = {
+        ERL_DRV_ATOM, st->list_close,
+    };
+    return output_term(st, spec, 2);
 }
 
 static yajl_callbacks erl_json_callbacks = {
@@ -157,18 +202,11 @@ static yajl_callbacks erl_json_callbacks = {
 int
 json_to_term(ErlDrvPort port, char* buf, int len, char** rbuf, int rlen)
 {
-    int resp;
     unsigned char* msg;
+    int resp;
     State st;
-    st.buf = term_buf_init();
-    st.depth = 0;
-    st.state[st.depth] = 0;
-
-    if(st.buf == NULL)
-    {
-        fprintf(stderr, "FAILED TO ALLOCATE TB\r\n");
-        return -1;
-    }
+    init_state(port, &st);
+    *rbuf = NULL;
     
     yajl_parser_config conf = {ALLOW_COMMENTS, CHECK_UTF8};
     yajl_handle handle = yajl_alloc(&erl_json_callbacks, &conf, &st);
@@ -176,26 +214,19 @@ json_to_term(ErlDrvPort port, char* buf, int len, char** rbuf, int rlen)
 
     if(stat != yajl_status_ok)
     {
-        //msg = yajl_get_error(handle, 1, buf, len);
         msg = yajl_get_error(handle, 0, NULL, 0);
-        fprintf(stderr, "ERROR: %s\r\n", msg);
+        resp = output_error(&st, msg);
         yajl_free_error(msg);
         yajl_free(handle);
-        term_buf_destroy(st.buf);
-        return -1;
+        return resp == 1 ? OK : ERROR;
     }
-
-    *rbuf = NULL;
-    resp = driver_send_term(port, driver_caller(port), st.buf->terms, st.buf->used);
+    
     yajl_free(handle);
-    term_buf_destroy(st.buf);
-
-    if(resp == 1)
-    {
-        return 0;
-    }
-    else
-    {
-        return -1;
-    }
+    
+    //ErlDrvTermData spec[] = {
+    //    ERL_DRV_ATOM, st.finished
+    //};
+    //resp = output_term(&st, spec, 2);
+    //return resp == YAJL_OK ? OK : ERROR;
+    return OK;
 }
