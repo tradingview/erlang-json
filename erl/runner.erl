@@ -5,8 +5,9 @@
 
 main() ->
     eep0018:start_driver("."),
-    run("eep0018", fun eep0018:term_to_json/1, fun eep0018:json_to_term/1, 25, 1000),
-    run("mochijson2", fun mochijson2:encode/1, fun mochijson2:decode/1, 25, 1000),
+    run("eep0018", fun eep0018:term_to_json/1, fun eep0018:json_to_term/1, 5, 1000),
+    run("mochijson2", fun mochijson2:encode/1, fun mochijson2:decode/1, 5, 1000),
+    run("rabbitmq", fun rabbitmq:encode/1, fun rabbitmq:decode/1, 5, 1000),
     init:stop().
 
 run(Name, Encode, Decode, Procs, Repeat) ->
