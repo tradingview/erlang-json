@@ -1,17 +1,38 @@
+% vim: encoding=utf-8 fileencoding=utf-8
+
 -module(runner).
 -export([main/0]).
 
 main() ->
     eep0018:start_driver("."),
-    run("eep0018", fun eep0018:term_to_json/1, fun eep0018:json_to_term/1, 10000),
-    run("mochijson2", fun mochijson2:encode/1, fun mochijson2:decode/1, 10000),
+    run("eep0018", fun eep0018:term_to_json/1, fun eep0018:json_to_term/1, 25, 1000),
+    run("mochijson2", fun mochijson2:encode/1, fun mochijson2:decode/1, 25, 1000),
     init:stop().
 
-run(Name, Encode, Decode, Num) ->
+run(Name, Encode, Decode, Procs, Repeat) ->
     Start = micro(),
-    repeat(Encode, Decode, Num),
+    spawn_procs(Encode, Decode, Procs, Repeat),
+    wait_for(Procs),
     End = micro(),
     io:format("~p: ~p~n", [Name, (End-Start)/1000000]).
+
+spawn_procs(_, _, 0, _) ->
+    ok;
+spawn_procs(Encode, Decode, Procs, Repeat) ->
+    Notify = self(),
+    spawn(fun() ->
+        repeat(Encode, Decode, Repeat),
+        Notify ! done
+    end),
+    spawn_procs(Encode, Decode, Procs-1, Repeat).
+
+wait_for(0) ->
+    ok;
+wait_for(N) ->
+    receive
+    done ->
+        wait_for(N-1)
+    end.
 
 repeat(_, _, 0) ->
     ok;
@@ -88,7 +109,7 @@ test_one(_, _, [], _N) ->
 test_one(Encode, Decode, [{E, J} | Rest], N) ->
     %io:format("[~p] ~p ~p~n", [N, E, J]),
     DJ = Decode(J),
-    ok = case equiv(E, Decode(J)) of
+    ok = case equiv(E, DJ) of
     false ->
         io:format("~p != ~p~n", [E, DJ]),
         error;
@@ -104,6 +125,7 @@ test_one(Encode, Decode, [{E, J} | Rest], N) ->
     true ->
         ok
     end,
+    
     test_one(Encode, Decode, Rest, 1+N).
 
 e2j_test_vec(utf8) ->
@@ -151,5 +173,5 @@ e2j_test_vec(utf8) ->
       "[-123,\"foo\",{\"bar\":[]},null]"},
 
      %% Unicode characters
-     {<<"¡üé">>, "\"\\u00A1\\u00FC\\u00E9\""}
-    ].
+     {[<<"¡">>, <<"ü">>], "[\"\\u00A1\",\"\\u00FC\"]"}
+   ].
