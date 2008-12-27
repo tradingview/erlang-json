@@ -30,6 +30,17 @@ eep0018_control(
     }
 }
 
+void
+eep0018_ready_async(ErlDrvData drv_data, ErlDrvThreadData thread_data)
+{
+    State* st = (State*) thread_data;
+    if(st->resp != OK)
+    {
+        fprintf(stderr, "ERROR PARSING JSON\r\n");
+    }
+    destroy_state(st);
+}
+
 static ErlDrvEntry
 eep0018_driver_entry =
 {
@@ -45,7 +56,7 @@ eep0018_driver_entry =
     eep0018_control,
     NULL,               /* Timeout */
     NULL,               /* Outputv */
-    NULL,               /* Ready Async */
+    eep0018_ready_async,
     NULL,               /* Flush */
     NULL,               /* Call */
     NULL,               /* Event */

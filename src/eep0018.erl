@@ -16,7 +16,13 @@ json_to_term(Json) when is_binary(Json) ->
     % yajl will throw a fit because it doesn't think it's finished
     % parsing correctly.
     [] = erlang:port_control(drv_port(), 1, <<Json/binary, 0:8>>),
-    build_term().
+    case (catch build_term()) of
+    {json_error, Reason} ->
+        io:format("JSON ERROR: ~p~n", [Reason]),
+        throw({json_error, Reason});
+    Else ->
+        Else
+    end.
 
 build_term() ->
     receive

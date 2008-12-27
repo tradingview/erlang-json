@@ -21,5 +21,5 @@ copy:
 	cp ../src/*.beam ./
 
 check: copy $(BEAM)
-	erl -noshell -s runner main
+	erl +A 10 -noshell -s runner main
 
