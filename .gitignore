@@ -1,3 +1,5 @@
 *.o
 *.so
 *.beam
+*.swp
+erl_crash.dump
