@@ -15,7 +15,8 @@ json_to_term(Json) when is_binary(Json) ->
     % The null byte is important for bare literals. Without it
     % yajl will throw a fit because it doesn't think it's finished
     % parsing correctly.
-    [] = erlang:port_control(drv_port(), 1, <<Json/binary, 0:8>>),
+    % [] = erlang:port_control(drv_port(), 1, <<Json/binary, 0:8>>),
+    drv_port() ! {self(), {command, <<Json/binary, 0:8>>}},
     case (catch build_term()) of
     {json_error, Reason} ->
         io:format("JSON ERROR: ~p~n", [Reason]),

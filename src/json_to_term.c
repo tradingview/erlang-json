@@ -9,25 +9,33 @@
 #define YAJL_OK 1
 #define YAJL_ERROR 0
 
-State*
-init_state(ErlDrvPort port, char* json, int jlen)
+typedef struct
 {
-    State* st = (State*) malloc(sizeof(State));
-    if(st == NULL) return NULL;
+    // Comm stuffs
+    ErlDrvPort      port;
+    ErlDrvTermData  pid;
     
+    // SAX States
+    ErlDrvTermData  value;
+    ErlDrvTermData  map_open;
+    ErlDrvTermData  map_close;
+    ErlDrvTermData  map_key;
+    ErlDrvTermData  list_open;
+    ErlDrvTermData  list_close;
+    ErlDrvTermData  finished;
+    ErlDrvTermData  error;
+    
+    // Stored atoms
+    ErlDrvTermData  atom_null;
+    ErlDrvTermData  atom_true;
+    ErlDrvTermData  atom_false;
+} State;
+
+static void
+init_state(ErlDrvPort port, State* st)
+{
     st->port = port;
     st->pid = driver_caller(port);
-
-    st->json = (char*) malloc(jlen * sizeof(char));
-    if(st->json == NULL)
-    {
-        free(st);
-        return NULL;
-    }
-    memcpy(st->json, json, jlen);
-    st->jlen = jlen;
-    
-    st->resp = -1;
      
     st->value = driver_mk_atom("value");
     st->map_open = driver_mk_atom("map_open");
@@ -41,35 +49,25 @@ init_state(ErlDrvPort port, char* json, int jlen)
     st->atom_null = driver_mk_atom("null");
     st->atom_true = driver_mk_atom("true");
     st->atom_false = driver_mk_atom("false");
-
-    return st;
-}
-
-void
-destroy_state(void* ctx)
-{
-    State* st = (State*) ctx;
-    free(st->json);
-    free(st);
 }
 
 inline int
 output_term(State* st, ErlDrvTermData* spec, int len)
 {
-    //int resp = driver_output_term(st->port, spec, len);
-    int resp = driver_send_term(st->port, st->pid, spec, len);
+    int resp = driver_output_term(st->port, spec, len);
+    //int resp = driver_send_term(st->port, st->pid, spec, len);
     return resp == 1 ? YAJL_OK : YAJL_ERROR;
 }
 
 int
-output_error(ErlDrvPort port, ErlDrvTermData pid, char* mesg)
+output_error(State* st, char* mesg)
 {
     ErlDrvTermData spec[] = {
-        ERL_DRV_ATOM, driver_mk_atom("error"),
+        ERL_DRV_ATOM, st->error,
         ERL_DRV_BUF2BINARY, (ErlDrvTermData) mesg, strlen((char*) mesg),
         ERL_DRV_TUPLE, 2
     };
-    return driver_send_term(port, pid, spec, 7);
+    return driver_output_term(st->port, spec, 7);
 }
 
 static int
@@ -204,44 +202,28 @@ static yajl_callbacks erl_json_callbacks = {
 #define CHECK_UTF8 0
 
 void
-json_parse(void* ctx)
+json_to_term(ErlDrvPort port, char* buf, int len)
 {
-    State* st = (State*) ctx;
+    State st;
     unsigned char* msg;
     int resp;
+   
+    init_state(port, &st);
     
     yajl_parser_config conf = {ALLOW_COMMENTS, CHECK_UTF8};
-    yajl_handle handle = yajl_alloc(&erl_json_callbacks, &conf, st);
-    yajl_status stat = yajl_parse(handle, (unsigned char*) st->json, st->jlen);
+    yajl_handle handle = yajl_alloc(&erl_json_callbacks, &conf, &st);
+    yajl_status stat = yajl_parse(handle, (unsigned char*) buf, len);
 
     if(stat != yajl_status_ok)
     {
         msg = yajl_get_error(handle, 0, NULL, 0);
-        resp = output_error(st->port, st->pid, (char*) msg);
+        resp = output_error(&st, (char*) msg);
         yajl_free_error(msg);
         yajl_free(handle);
-        st->resp = resp == 1 ? OK : ERROR;
     }
     else
     {
-        st->resp = OK;
         yajl_free(handle);
     }
 }
 
-int
-json_to_term(ErlDrvPort port, char* buf, int len, char** rbuf, int rlen)
-{
-    int resp;
-    State* st = init_state(port, buf, len);
-    if(st == NULL)
-    {
-        resp = output_error(port, driver_caller(port), "enomem");
-        return resp == 1 ? OK : ERROR;
-    }
-
-    driver_async(port, NULL, json_parse, st, destroy_state);
-
-    *rbuf = NULL;
-    return 0;
-}

@@ -10,6 +10,16 @@ eep0018_start(ErlDrvPort port, char *buff)
     return (ErlDrvData) port;
 }
 
+static void
+eep0018_output(
+        ErlDrvData drv_data,
+        char* buf,
+        int len
+)
+{
+    json_to_term((ErlDrvPort) drv_data, buf, len);
+}
+
 static int
 eep0018_control(
         ErlDrvData drv_data,
@@ -23,22 +33,9 @@ eep0018_control(
     {
         case 0:
             return term_to_json(buf, len, rbuf, rlen);
-        case 1:
-            return json_to_term((ErlDrvPort) drv_data, buf, len, rbuf, rlen);
         default:
             return -1;
     }
-}
-
-void
-eep0018_ready_async(ErlDrvData drv_data, ErlDrvThreadData thread_data)
-{
-    State* st = (State*) thread_data;
-    if(st->resp != OK)
-    {
-        fprintf(stderr, "ERROR PARSING JSON\r\n");
-    }
-    destroy_state(st);
 }
 
 static ErlDrvEntry
@@ -47,7 +44,7 @@ eep0018_driver_entry =
     NULL,               /* Init */
     eep0018_start,
     NULL,               /* Stop */
-    NULL,               /* Output */
+    eep0018_output,
     NULL,               /* Input Ready */
     NULL,               /* Output Ready */
     "eep0018_drv",      /* Driver Name */
@@ -56,7 +53,7 @@ eep0018_driver_entry =
     eep0018_control,
     NULL,               /* Timeout */
     NULL,               /* Outputv */
-    eep0018_ready_async,
+    NULL,               /* Ready Async */
     NULL,               /* Flush */
     NULL,               /* Call */
     NULL,               /* Event */
