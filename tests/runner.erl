@@ -7,7 +7,9 @@ main() ->
     eep0018:start_driver("."),
     Cases = read_cases(),
     run("eep0018", Cases, fun eep0018:term_to_json/1, fun eep0018:json_to_term/1),
+    timer:sleep(1000),
     run("mochijson2", Cases, fun mochijson2:encode/1, fun mochijson2:decode/1),
+    timer:sleep(1000),
     run("rabbitmq", Cases, fun rabbitmq:encode/1, fun rabbitmq:decode/1),
     init:stop().
 
