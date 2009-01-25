@@ -1,63 +1,55 @@
-/* eep0018.c */
-
 #include "eep0018.h"
+#include "log.h"
 
-static ErlDrvData
-eep0018_start(ErlDrvPort port, char *buff)
+/*
+ * == OTP driver management ===========================================
+ */
+
+static ErlDrvData eep0018_drv_start(ErlDrvPort port, char *buf)
 {
-    if(port == NULL) return ERL_DRV_ERROR_GENERAL;
-    set_port_control_flags(port, PORT_CONTROL_FLAG_BINARY);
-    return (ErlDrvData) port;
+  set_port_control_flags(port, PORT_CONTROL_FLAG_BINARY);
+  return (ErlDrvData)port;
 }
 
-static int
-eep0018_control(
-        ErlDrvData drv_data,
-        unsigned int command,
-        char* buf,
-        int len,
-        char **rbuf,
-        int rlen)
+static void eep0018_drv_stop(ErlDrvData handle)
 {
-    switch(command)
-    {
-        case 0:
-            return term_to_json(buf, len, rbuf, rlen);
-        case 1:
-            return json_to_term((ErlDrvPort) drv_data, buf, len, rbuf, rlen);
-        default:
-            return -1;
-    }
 }
 
-static ErlDrvEntry
-eep0018_driver_entry =
+static void eep0018_drv_on_input(ErlDrvData session, char *buf, int len)
 {
-    NULL,               /* Init */
-    eep0018_start,
-    NULL,               /* Stop */
-    NULL,               /* Output */
-    NULL,               /* Input Ready */
-    NULL,               /* Output Ready */
-    "eep0018_drv",      /* Driver Name */
-    NULL,               /* Finish */
-    NULL,               /* Handle */
-    eep0018_control,
-    NULL,               /* Timeout */
-    NULL,               /* Outputv */
-    NULL,               /* Ready Async */
-    NULL,               /* Flush */
-    NULL,               /* Call */
-    NULL,               /* Event */
-    ERL_DRV_EXTENDED_MARKER,
-    ERL_DRV_EXTENDED_MAJOR_VERSION,
-    ERL_DRV_EXTENDED_MINOR_VERSION,
-    ERL_DRV_FLAG_USE_PORT_LOCKING,
-    NULL,               /* Reserved */
-    NULL,               /* Process Exit */
+  char cmd = buf[0];
+  char opts = buf[1];
+  
+  buf += 2; len -= 2;
+
+  flog(stderr, "parsing/w opts", opts, buf, len);
+  
+  switch(cmd) {
+  case EEP0018_PARSE_EI: 
+    json_parse_to_ei(session, (unsigned char*) buf, len, opts);
+    break;
+    
+  default:
+    flog(stderr, "Unknown input", 0, buf, len);
+  }
+}
+
+static ErlDrvEntry eep0018_driver_entry = {
+  NULL,               /* F_PTR init, N/A */
+  eep0018_drv_start,  /* L_PTR start, called when port is opened */
+  eep0018_drv_stop,   /* F_PTR stop, called when port is closed */
+  eep0018_drv_on_input,               /* F_PTR output, called when erlang has sent data to the port */
+  NULL,               /* F_PTR ready_input, called when input descriptor ready to read*/
+  NULL,               /* F_PTR ready_output, called when output descriptor ready to write */
+  "eep0018_drv",      /* char *driver_name, the argument to open_port */
+  NULL,               /* F_PTR finish, called when unloaded */
+  NULL,               /* F_PTR control, port_command callback */
+  NULL,               /* F_PTR timeout, reserved */
+  NULL                /* F_PTR outputv, reserved */
 };
 
-DRIVER_INIT(eep0018_drv)    /* must match name in driver_entry */
+DRIVER_INIT(eep0018_drv) /* must match name in driver_entry */
 {
-    return &eep0018_driver_entry;
+  flog(stderr, "driver loaded.\n", 0, 0, 0);
+  return &eep0018_driver_entry;
 }

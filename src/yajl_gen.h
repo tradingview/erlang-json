@@ -35,11 +35,10 @@
  * Interface to YAJL's JSON generation facilities.
  */
 
+#include "yajl_common.h"
+
 #ifndef __YAJL_GEN_H__
 #define __YAJL_GEN_H__
-
-#include "ei_bin_buf.h"
-#include "yajl_common.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -98,7 +97,9 @@ extern "C" {
     /** access the null terminated generator buffer.  If incrementally
      *  outputing JSON, one should call yajl_gen_clear to clear the
      *  buffer.  This allows stream generation. */
-    ErlDrvBinary* YAJL_API yajl_gen_get_buf(yajl_gen hand);
+    yajl_gen_status YAJL_API yajl_gen_get_buf(yajl_gen hand,
+                                              const unsigned char ** buf,
+                                              unsigned int * len);
 
     /** clear yajl's output buffer, but maintain all internal generation
      *  state.  This function will not "reset" the generator state, and is

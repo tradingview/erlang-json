@@ -13,7 +13,7 @@ INCLUDES += -I$(EIROOT)/include
 LIBS = -L$(EIROOT)/lib -lerl_interface -lei
 
 # OS X flags.
-GCCFLAGS = -O3 -fPIC -bundle -flat_namespace -undefined suppress -fno-common -Wall
+GCCFLAGS = -DNDEBUG -O3 -fPIC -bundle -flat_namespace -undefined suppress -fno-common -Wall
 
 # Linux Flags
 #GCCFLAGS = -O3 -fPIC -shared -fno-common -Wall
@@ -23,10 +23,8 @@ LDFLAGS = $(GCCFLAGS) $(LIBS)
 
 OBJECTS = \
 	eep0018.o \
-	ei_bin_buf.o \
-	json_to_term.o \
-	term_buf.o \
-	term_to_json.o \
+	json_parse.o \
+    log.o \
 	yajl.o \
 	yajl_encode.o \
 	yajl_lex.o \

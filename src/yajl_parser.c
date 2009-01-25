@@ -139,8 +139,7 @@ yajl_do_parse(yajl_handle hand, unsigned int * offset,
     yajl_tok tok;
     const unsigned char * buf;
     unsigned int bufLen;
-    unsigned int decLen;
-    
+
   around_again:
     switch (yajl_state_current(hand)) {
         case yajl_state_parse_complete:
@@ -179,12 +178,10 @@ yajl_do_parse(yajl_handle hand, unsigned int * offset,
                 case yajl_tok_string_with_escapes:
                     if (hand->callbacks && hand->callbacks->yajl_string) {
                         yajl_buf_clear(hand->decodeBuf);
-                        //yajl_string_decode(hand->decodeBuf, buf, bufLen);
-                        //_CC_CHK(hand->callbacks->yajl_string(
-                        //            hand->ctx, yajl_buf_data(hand->decodeBuf),
-                        //            yajl_buf_len(hand->decodeBuf)));
-                        decLen = yajl_string_decode(hand->decodeBuf, buf, bufLen);
-                        _CC_CHK(hand->callbacks->yajl_string(hand->ctx, buf, decLen));
+                        yajl_string_decode(hand->decodeBuf, buf, bufLen);
+                        _CC_CHK(hand->callbacks->yajl_string(
+                                    hand->ctx, yajl_buf_data(hand->decodeBuf),
+                                    yajl_buf_len(hand->decodeBuf)));
                     }
                     break;
                 case yajl_tok_bool: 
@@ -334,10 +331,9 @@ yajl_do_parse(yajl_handle hand, unsigned int * offset,
                 case yajl_tok_string_with_escapes:
                     if (hand->callbacks && hand->callbacks->yajl_map_key) {
                         yajl_buf_clear(hand->decodeBuf);
-                        //yajl_string_decode(hand->decodeBuf, buf, bufLen);
-                        //buf = yajl_buf_data(hand->decodeBuf);
-                        //bufLen = yajl_buf_len(hand->decodeBuf);
-                        bufLen = yajl_string_decode(hand->decodeBuf, buf, bufLen);
+                        yajl_string_decode(hand->decodeBuf, buf, bufLen);
+                        buf = yajl_buf_data(hand->decodeBuf);
+                        bufLen = yajl_buf_len(hand->decodeBuf);
                     }
                     /* intentional fall-through */
                 case yajl_tok_string:
