@@ -1,3 +1,9 @@
+/* Copyright (c) 2008-2009 Paul J. Davis <paul.joseph.davis@gmail.com>
+ * Copyright (c) 2008-2009 Enrico Thierbach <eno@open-lab.org>
+ *
+ * This file is part of EEP0018, which is released under the MIT
+ * license.
+ */
 
 #include "eep0018.h"
 
