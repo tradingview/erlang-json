@@ -1,8 +1,7 @@
 /* Copyright (c) 2008-2009 Paul J. Davis <paul.joseph.davis@gmail.com>
  * Copyright (c) 2008-2009 Enrico Thierbach <eno@open-lab.org>
  *
- * This file is part of EEP0018, which is released under the MIT
- * license.
+ * This file is part of EEP0018, which is released under the MIT license.
  */
 
 #include "eep0018.h"
@@ -21,15 +20,16 @@ eep0018_control(
         unsigned int command,
         char* buf,
         int len,
-        char **rbuf,
-        int rlen)
+        char** rbuf,
+        int rlen
+)
 {
     switch(command)
     {
         case 0:
-            return term_to_json(buf, len, rbuf, rlen);
+            return encode_json(buf, len, rbuf, rlen);
         case 1:
-            return json_to_term((ErlDrvPort) drv_data, buf, len, rbuf, rlen);
+            return decode_json((ErlDrvPort) drv_data, buf, len, rbuf, rlen);
         default:
             return -1;
     }
@@ -47,7 +47,7 @@ eep0018_driver_entry =
     "eep0018_drv",      /* Driver Name */
     NULL,               /* Finish */
     NULL,               /* Handle */
-    eep0018_control,
+    eep0018_control,    /* Control */
     NULL,               /* Timeout */
     NULL,               /* Outputv */
     NULL,               /* Ready Async */

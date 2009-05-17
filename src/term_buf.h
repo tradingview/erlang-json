@@ -1,8 +1,7 @@
 /* Copyright (c) 2008-2009 Paul J. Davis <paul.joseph.davis@gmail.com>
  * Copyright (c) 2008-2009 Enrico Thierbach <eno@open-lab.org>
  *
- * This file is part of EEP0018, which is released under the MIT
- * license.
+ * This file is part of EEP0018, which is released under the MIT license.
  */
 
 #ifndef __TERM_BUF_H__
@@ -10,19 +9,27 @@
 
 #include <erl_driver.h>
 
-typedef struct
-{
-    double*         data;
-    int             used;
-    int             length;
-} dbl_store;
+typedef ErlDrvTermData TermData;
 
 typedef struct
 {
-    ErlDrvTermData* terms;
-    int             length;
-    int             used;
-    dbl_store*      store;
+    double*     data;
+    int         used;
+    int         length;
+} dbl_buf;
+
+typedef struct
+{
+    int*        types;
+    int*        depths;
+} state_buf;
+
+typedef struct
+{
+    TermData*   terms;
+    int         length;
+    int         used;
+    dbl_buf*    doubles;
 } term_buf;
 
 term_buf* term_buf_init(void);

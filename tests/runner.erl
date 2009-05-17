@@ -12,79 +12,79 @@
 main() ->
     eep0018:start_driver("."),
     Cases = read_cases(),
-    run("eep0018", Cases, fun eep0018:term_to_json/1, fun eep0018:json_to_term/1),
-    run("mochijson2", Cases, fun mochijson2:encode/1, fun mochijson2:decode/1),
-    run("rabbitmq", Cases, fun rabbitmq:encode/1, fun rabbitmq:decode/1),
+
+    io:format("eep0018 =>~n", []),
+    run(Cases, fun eep0018:encode_json/1, fun eep0018:decode_json/1),
+
+    %lists:foreach(fun(Num) ->
+    %    Encode = fun eep0018:encode_json/1,
+    %    Decode = fun eep0018:decode_json/1,
+    %    Time = timed(fun() -> multiple(Num, Cases, Encode, Decode) end),
+    %    io:format("~p, ~p~n", [Num, Time])
+    %end, lists:seq(1, 25)),
+
+    %io:format("mochijson =>~n", []),
+    %run(Cases, fun mochijson2:encode/1, fun mochijson2:decode/1),
+
+    %io:format("rabbitmq =>~n", []),
+    %run(Cases, fun rabbitmq:encode/1, fun rabbitmq:decode/1),
+
     init:stop().
 
-run(Name, Cases, Encode, Decode) ->
-    timed(single_proc, Name, fun() -> single(Cases, Encode, Decode) end),
-    timed(multi_proc, Name, fun() -> multiple(Cases, Encode, Decode) end).
+run(Cases, Encode, Decode) ->
+    T1 = timed(fun() -> single(Cases, Encode, Decode) end),
+    io:format("\tsingle -> ~6.3f~n", [T1]),
+    T2 = timed(fun() -> multiple(?PROCS, Cases, Encode, Decode) end),
+    io:format("\tmulti  -> ~6.3f~n", [T2]).
 
-timed(Prefix, Name, Func) ->
+timed(Func) ->
     Start = micro(),
-    Result = Func(),
+    Func(),
     End = micro(),
-    display(Prefix, Name, Start, End, Result).
+    (End-Start)/1000000.
 
 single(Cases, Encode, Decode) ->
-    lists:foldl(fun({_Case, Json, Term}, {AccDec, AccRound}) ->
-        case Term of
-        nil ->
+    lists:foldl(fun({Case, Json, Term}, nil) ->
+        try
             Decode(Json),
-            {0, 0};
-        _ ->
-            AccDec2 = case (catch compare:equiv(Term, Decode(Json))) of
-            true ->
-                AccDec;
+            case Term of
+                nil -> ok;
+                _ ->
+                    compare:equiv(Term, Decode(Json)),
+                    compare:equiv(Term, Decode(Encode(Term)))
+            end
+        catch
             _ ->
-                AccDec+1
-            end,
-            AccRound2 = case (catch compare:equiv(Term, Decode(Encode(Term)))) of
-            true ->
-                AccRound;
-            _ ->
-                AccRound+1
-            end,
-            {AccDec2, AccRound2}
-        end
-    end, {0, 0}, Cases).
+                io:format("\tFailed case: ~p~n", [Case])
+        end,
+        nil
+    end, nil, Cases).
 
-multiple(Cases, Encode, Decode) ->
+multiple(Procs, Cases, Encode, Decode) ->
     RunFun = fun() -> single(Cases, Encode, Decode) end,
-    spawn_procs(?PROCS, RunFun),
-    wait_for_procs(?PROCS, {0, 0}).
+    spawn_procs(Procs, RunFun),
+    ok = wait_for_procs(Procs).
 
 spawn_procs(0, _) ->
     ok;
 spawn_procs(N, Func) ->
     S = self(),
-    spawn(fun() -> S ! {finished, Func()} end),
+    spawn(fun() -> Func(), S ! finished end),
     spawn_procs(N-1, Func).
 
-wait_for_procs(0, Acc) ->
-    Acc;
-wait_for_procs(N, {Dec, Round}) ->
-    receive {finished, {Dec2, Round2}} -> ok end,
-    wait_for_procs(N-1, {Dec+Dec2, Round+Round2}).
+wait_for_procs(0) ->
+    ok;
+wait_for_procs(N) ->
+    receive finished -> ok end,
+    wait_for_procs(N-1).
 
 micro() ->
     {Mega, Secs, Micro} = erlang:now(),
     (Mega * 1000000 + Secs) * 1000000 + Micro.
 
-display(Prefix, Name, Start, End, Result) ->
-    case Result of
-    {0, 0} ->
-        io:format("~11s => ~10s: ~6.3f s [success]~n", [Prefix, Name, (End-Start)/1000000]);
-    {Dec, Round} ->
-        io:format(
-            "~11s => ~10s: ~6.3f s [failure]~n\t~p decoding errors.~n\t~p round trip errors.~n",
-            [Prefix, Name, (End-Start)/1000000, Dec, Round]
-        )
-    end.
-
 read_cases() ->
-    {ok, FileNames} = file:list_dir("./cases"),
+    {ok, Unsorted} = file:list_dir("./cases"),
+    FileNames = lists:sort(Unsorted),
     JsonFiles = [Fname || Fname <- FileNames, lists:suffix(".json", Fname)],
     [
         begin

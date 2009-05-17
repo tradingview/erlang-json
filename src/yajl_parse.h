@@ -1,5 +1,5 @@
 /*
- * Copyright 2007, Lloyd Hilaiel.
+ * Copyright 2007-2009, Lloyd Hilaiel.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -129,6 +129,7 @@ extern "C" {
      */
     yajl_handle YAJL_API yajl_alloc(const yajl_callbacks * callbacks,
                                     const yajl_parser_config * config,
+                                    const yajl_alloc_funcs * allocFuncs,
                                     void * ctx);
 
     /** free a parser handle */    
@@ -143,6 +144,17 @@ extern "C" {
                                     const unsigned char * jsonText,
                                     unsigned int jsonTextLength);
 
+    /** Parse any remaining buffered json.
+     *  Since yajl is a stream-based parser, without an explicit end of
+     *  input, yajl sometimes can't decide if content at the end of the
+     *  stream is valid or not.  For example, if "1" has been fed in,
+     *  yajl can't know whether another digit is next or some character
+     *  that would terminate the integer token.
+     *
+     *  \param hand - a handle to the json parser allocated with yajl_alloc
+     */
+    yajl_status yajl_parse_complete(yajl_handle hand);
+    
     /** get an error string describing the state of the
      *  parse.
      *
@@ -158,10 +170,10 @@ extern "C" {
                                             unsigned int jsonTextLength);
 
     /** free an error returned from yajl_get_error */
-    void YAJL_API yajl_free_error(unsigned char * str);
+    void YAJL_API yajl_free_error(yajl_handle hand, unsigned char * str);
 
 #ifdef __cplusplus
-};
+}
 #endif    
 
 #endif

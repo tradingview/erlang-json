@@ -1,5 +1,5 @@
 /*
- * Copyright 2007, Lloyd Hilaiel.
+ * Copyright 2007-2009, Lloyd Hilaiel.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -61,6 +61,8 @@ struct yajl_handle_t {
     yajl_buf decodeBuf;
     /* a stack of states.  access with yajl_state_XXX routines */
     yajl_buf stateBuf;
+    /* memory allocation routines */
+    yajl_alloc_funcs alloc;
 };
 
 yajl_status

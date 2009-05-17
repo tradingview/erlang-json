@@ -1,5 +1,5 @@
 /*
- * Copyright 2007, Lloyd Hilaiel.
+ * Copyright 2007-2009, Lloyd Hilaiel.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -45,7 +45,7 @@ static void CharToHex(unsigned char c, char * hexBuf)
 }
 
 void
-yajl_string_encode(ei_bin_buf* buf, const unsigned char * str,
+yajl_string_encode(yajl_buf buf, const unsigned char * str,
                    unsigned int len)
 {
     unsigned int beg = 0;
@@ -55,7 +55,7 @@ yajl_string_encode(ei_bin_buf* buf, const unsigned char * str,
     hexBuf[6] = 0;
 
     while (end < len) {
-        char * escaped = NULL;
+        const char * escaped = NULL;
         switch (str[end]) {
             case '\r': escaped = "\\r"; break;
             case '\n': escaped = "\\n"; break;
@@ -73,14 +73,14 @@ yajl_string_encode(ei_bin_buf* buf, const unsigned char * str,
                 break;
         }
         if (escaped != NULL) {
-            ei_bin_buf_append(buf, str + beg, end - beg);
-            ei_bin_buf_append(buf, escaped, strlen(escaped));
+            yajl_buf_append(buf, str + beg, end - beg);
+            yajl_buf_append(buf, escaped, strlen(escaped));
             beg = ++end;
         } else {
             ++end;
         }
     }
-    ei_bin_buf_append(buf, str + beg, end - beg);
+    yajl_buf_append(buf, str + beg, end - beg);
 }
 
 static void hexToDigit(unsigned int * val, const unsigned char * hex)
@@ -121,21 +121,17 @@ static void Utf32toUtf8(unsigned int codepoint, char * utf8Buf)
     }
 }
 
-unsigned int
-yajl_string_decode(yajl_buf buf, const unsigned char * str,
+void yajl_string_decode(yajl_buf buf, const unsigned char * str,
                         unsigned int len)
 {
-    unsigned int ins = 0;
     unsigned int beg = 0;
     unsigned int end = 0;    
-    
+
     while (end < len) {
         if (str[end] == '\\') {
             char utf8Buf[5];
             const char * unescaped = "?";
-            //yajl_buf_append(buf, str + beg, end - beg);
-            memmove(str+ins, str+beg, end-beg);
-            ins += end-beg;
+            yajl_buf_append(buf, str + beg, end - beg);
             switch (str[++end]) {
                 case 'r': unescaped = "\r"; break;
                 case 'n': unescaped = "\n"; break;
@@ -173,15 +169,11 @@ yajl_string_decode(yajl_buf buf, const unsigned char * str,
                 default:
                     assert("this should never happen" == NULL);
             }
-            //yajl_buf_append(buf, unescaped, strlen(unescaped));
-            memmove(str+ins, unescaped, strlen(unescaped));
-            ins += strlen(unescaped);
+            yajl_buf_append(buf, unescaped, strlen(unescaped));
             beg = ++end;
         } else {
             end++;
         }
     }
-    //yajl_buf_append(buf, str + beg, end - beg);
-    memmove(str+ins, str+beg, end-beg);
-    return ins + (end-beg);
+    yajl_buf_append(buf, str + beg, end - beg);
 }

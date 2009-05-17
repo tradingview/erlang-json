@@ -30,15 +30,36 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */ 
 
-#ifndef __YAJL_ENCODE_H__
-#define __YAJL_ENCODE_H__
+/**
+ * \file yajl_alloc.h
+ * default memory allocation routines for yajl which use malloc/realloc and
+ * free
+ */
 
-#include "yajl_buf.h"
+#include "yajl_alloc.h"
+#include <stdlib.h>
 
-void yajl_string_encode(yajl_buf buf, const unsigned char * str,
-                        unsigned int length);
+static void * yajl_internal_malloc(void *ctx, unsigned int sz)
+{
+    return malloc(sz);
+}
 
-void yajl_string_decode(yajl_buf buf, const unsigned char * str,
-                        unsigned int length);
+static void * yajl_internal_realloc(void *ctx, void * previous,
+                                    unsigned int sz)
+{
+    return realloc(previous, sz);
+}
 
-#endif
+static void yajl_internal_free(void *ctx, void * ptr)
+{
+    free(ptr);
+}
+
+void yajl_set_default_alloc_funcs(yajl_alloc_funcs * yaf)
+{
+    yaf->malloc = yajl_internal_malloc;
+    yaf->free = yajl_internal_free;
+    yaf->realloc = yajl_internal_realloc;
+    yaf->ctx = NULL;
+}
+
