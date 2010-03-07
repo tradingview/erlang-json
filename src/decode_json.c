@@ -4,17 +4,30 @@
  * This file is part of EEP0018, which is released under the MIT license.
  */
 
+/*
+ Changelog:
+	7th of March 2010 by Thijs Terlouw <thijsterlouw@gmail.com>
+	The original implementation of the string buffers had a serious error:
+	When a string was added to the buffer that was larger than the free size of 
+	that buffer, a new buffer would be created and the old buffer would be freed.
+	Unfortunately previous strings in the buffer still had references to the old
+	buffer. This means that the string in the original buffer could be modified,
+	leading to data corruption. The reference is used in json_string/add_term.
+	Solution: do not reallocate buffers (by keeping a linked list of buffers)
+*/
+
 #ifndef WIN32
 #include <string.h>
 #endif
 
+#include <math.h>
 #include "eep0018.h"
 #include "yajl_parse.h"
 
 #define INIT_DBL_LEN 1024
 #define INIT_TERM_LEN 4096
 #define INIT_OBJ_LEN 256
-#define INIT_STR_LEN 4096
+#define INIT_STR_LEN 4096		//initial size for string buffer
 
 #define NO_TYPE 0
 #define MAP_TYPE 1
@@ -24,6 +37,17 @@
 
 typedef ErlDrvTermData TermData;
 typedef unsigned char uchar;
+
+typedef struct slab_node
+{
+	uchar* 				str_data;
+	int					str_length;
+	int					str_used;
+	
+	struct slab_node*	next;
+} Slab;
+
+
 
 typedef struct
 {
@@ -42,14 +66,13 @@ typedef struct
 
     uchar*          str_start;
     uchar*          str_end;
-    uchar*          str_data;
-    int             str_length;
-    int             str_used;
+	Slab*			str_slab;		//new: pointer to linkedlist of Slabs
 
     TermData        nullTerm;
     TermData        trueTerm;
     TermData        falseTerm;
 } Decoder;
+
 
 void destroy_decoder(Decoder* dec);
 
@@ -80,10 +103,24 @@ init_decoder(uchar* str_start, uchar* str_end)
 
     dec->str_start = str_start;
     dec->str_end = str_end;
-    dec->str_data = (uchar*) malloc(INIT_STR_LEN * sizeof(uchar));
+    
+	//make our head element
+	dec->str_slab = (Slab*) malloc(sizeof(Slab));
+	if(dec->str_slab == NULL) goto done;
+	//allocate the string data buffer
+	dec->str_slab->str_data=(uchar*) malloc(INIT_STR_LEN * sizeof(uchar));
+	if(dec->str_slab->str_data == NULL) goto done;
+	//init the defaults
+	dec->str_slab->str_length=INIT_STR_LEN;
+	dec->str_slab->str_used=0;
+	dec->str_slab->next=NULL;
+	
+	/*
+	dec->str_data = (uchar*) malloc(INIT_STR_LEN * sizeof(uchar));
     if(dec->str_data == NULL) goto done;
     dec->str_length = INIT_STR_LEN;
     dec->str_used = 0;
+	*/
 
     dec->nullTerm = driver_mk_atom("null");
     dec->trueTerm = driver_mk_atom("true");
@@ -104,12 +141,24 @@ done:
 void
 destroy_decoder(Decoder* dec)
 {
+	//fprintf(stderr, "destroy_decoder");
     if(dec == NULL) return;
     if(dec->dbl_data != NULL) free(dec->dbl_data);
     if(dec->term_data != NULL) free(dec->term_data);
     if(dec->obj_types != NULL) free(dec->obj_types);
     if(dec->obj_members != NULL) free(dec->obj_members);
-    if(dec->str_data != NULL) free(dec->str_data);
+    if(dec->str_slab != NULL)
+	{		
+		Slab* next;
+		Slab* current = dec->str_slab;
+		for(current; current!=NULL; current = next)
+		{
+			//fprintf(stderr, "freed slab of size: %d\n", current->str_length);
+			next = current->next;
+			if(current->str_data != NULL) free(current->str_data);
+			free(current);
+		}
+	}
     free(dec);
 }
 
@@ -260,30 +309,77 @@ done:
 static inline const uchar*
 add_string(Decoder* dec, const uchar* buf, unsigned int length)
 {
-    const uchar* ret = NULL;
-    uchar* next = NULL;
+	//fprintf(stderr, "[add_string] length: %d\n", length);
+
+    // String still in buffer, so we dont need to store it temporary here
+    if(buf >= dec->str_start && buf <= dec->str_end) 
+	{
+		//fprintf(stderr, "[add_string] still in buffer, return immediately\n");
+		return buf;
+	}
+    
+	const uchar* ret = NULL;
     int new_length = 0;
 
-    // String still in buffer
-    if(buf >= dec->str_start && buf <= dec->str_end) return buf;
-    
-    if(length > dec->str_length - dec->str_used)
-    {
-        new_length = 2 * dec->str_length;
-        if(length > new_length - dec->str_used) new_length += 2 * length;
-        next = (uchar*) malloc(new_length * sizeof(uchar));
-        if(next == NULL) goto done;
-
-        memcpy(next, dec->str_data, dec->str_length * sizeof(uchar));
-        free(dec->str_data);
-        dec->str_data = next;
-
-        dec->str_length = new_length;
-    }
-
-    memcpy(dec->str_data + dec->str_used, buf, length * sizeof(uchar));
-    dec->str_used += length;
-    ret = dec->str_data + (dec->str_used - length);
+	/*
+		we want to store "length" bytes, check if there is enough free space
+		walk through all slabs, check each if there is enough free space. 
+		if none has enough free space, then make a new slab with enough free space
+		the new slab will then be added to the head (because most likely this one
+		has enough free space for the next string as well). 
+		
+		The size of the new slab depends on the requested length:
+			if length < INIT_STR_LEN/2 : new_length=INIT_STR_LEN
+			else create a new buffer : multiple of INIT_STR_LEN and bigger than length
+	*/
+	Slab* first = dec->str_slab;			//used to replace the head
+	Slab* current = dec->str_slab;			//current slab we are inspecting
+	Slab* next = NULL;						//next one we will try
+	
+	//as long as we have not found a slab with enough free space...
+	while(length > current->str_length - current->str_used)
+	{
+		if (current->next != NULL) 		//if there is another slab, then try that one
+		{
+			current = current->next;
+		}
+		else	//no slabs available, create a new one + add to head
+		{
+			if(length<INIT_STR_LEN/2)
+			{
+				new_length = INIT_STR_LEN;
+			}
+			else
+			{
+				new_length = INIT_STR_LEN*ceil(1+(double)length/INIT_STR_LEN);
+			}
+			
+			Slab* new_slab = (Slab*) malloc(sizeof(Slab));			
+			if(new_slab == NULL) goto done;
+			new_slab->str_data = (uchar*) malloc(new_length * sizeof(uchar));
+			if(new_slab->str_data == NULL) goto done;
+			
+			//init defaults for the slab
+			new_slab->str_length=new_length;
+			new_slab->str_used=0;
+			new_slab->next=first;		// new_slab will be the new head, point to old head
+			
+			dec->str_slab = new_slab;	// new_slab becomes the new head
+			current = new_slab;			// current will be used to store
+			
+			//fprintf(stderr, "[add_string] new slab of length %d created\n", new_length);
+			break;	//have enough for sure
+		}
+	}
+	
+	//fprintf(stderr, "[add_string] got a slab: free: %d\n", current->str_length - current->str_used);
+	
+	memcpy(current->str_data + current->str_used, buf, length * sizeof(uchar));
+	//update the used length
+	current->str_used += length;
+	//return a pointer to the new buffer
+	ret = current->str_data + (current->str_used - length);
+				
 done:
     return ret;
 }
