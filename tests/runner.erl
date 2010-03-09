@@ -10,7 +10,7 @@
 -define(PROCS, 5).
 
 main() ->
-    eep0018:start_driver("."),
+    eep0018:start("."),
     Cases = read_cases(),
 
     io:format("eep0018 =>~n", []),
