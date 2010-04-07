@@ -1,5 +1,5 @@
 -module(json).
--export([encode/1, decode/1]).
+-export([encode/1, decode/1, fuzz/0, fuzz/1]).
 -on_load(init/0).
 
 init() ->
@@ -21,6 +21,11 @@ decode(_) ->
 
 encode(_) ->
     not_loaded(?LINE).
+
+fuzz() ->
+    json_fuzz:fuzz(fun json_fuzz:choose/4).
+fuzz(Chooser) ->
+    json_fuzz:fuzz(Chooser).
 
 not_loaded(Line) ->
     exit({json_not_loaded, module, ?MODULE, line, Line}).
