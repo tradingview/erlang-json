@@ -10,13 +10,6 @@ fuzz(Fun) ->
     put(jf_state, [0]),
     value().
 
-choose(Depth, _Width, value, _Possible) ->
-    case Depth < 5 of
-        true -> choice([array, map]);
-        false -> choice([null, true, false, number, string])
-    end;
-choose(Depth, _Width, value, _Possible) ->
-    case Depth < 5
 choose(_Depth, _Width, _State, Possible) ->
     choice(Possible).
 
