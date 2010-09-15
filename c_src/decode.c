@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "erl_nif.h"
+#include "erl_nif_compat.h"
 #include "yajl/yajl_parse.h"
 #include "yajl/yajl_parser.h"
 #include "yajl/yajl_lex.h"
@@ -53,7 +54,7 @@ destroy_decoder(Decoder* dec, ErlNifEnv* env)
         {
             obj = dec->stack[dec->depth];
             dec->stack[dec->depth] = obj->next;
-            enif_free(dec->env, obj);
+            enif_free_compat(dec->env, obj);
         }
         dec->depth--;
     }
@@ -149,7 +150,7 @@ push_value(Decoder* dec, ERL_NIF_TERM val)
     }
     
     // New object slab required
-    new = (Object*) enif_alloc(dec->env, sizeof(Object));
+    new = (Object*) enif_alloc_compat(dec->env, sizeof(Object));
     if(new == NULL)
     {
         dec->error = enif_make_atom(dec->env, "memory_error");
@@ -190,7 +191,7 @@ pop_object(Decoder* dec, ERL_NIF_TERM* val)
             ret = enif_make_list_cell(dec->env, curr->slab[--curr->used], ret);
         }
         dec->stack[dec->depth] = curr->next;
-        enif_free(dec->env, curr);
+        enif_free_compat(dec->env, curr);
     }
 
     dec->depth--;
@@ -240,7 +241,7 @@ decode_string(void* ctx, const unsigned char* data, unsigned int size)
 {
     ErlNifBinary bin;
     Decoder* dec = (Decoder*) ctx;
-    if(!enif_alloc_binary(dec->env, size, &bin))
+    if(!enif_alloc_binary_compat(dec->env, size, &bin))
     {
         dec->error = enif_make_atom(dec->env, "memory_error");
         return ERROR;
@@ -267,7 +268,7 @@ decode_start_obj(void* ctx)
     }
     dec->depth++;
     
-    obj = (Object*) enif_alloc(dec->env, sizeof(Object));
+    obj = (Object*) enif_alloc_compat(dec->env, sizeof(Object));
     if(obj == NULL)
     {
         dec->error = enif_make_atom(dec->env, "memory_error");
@@ -297,7 +298,7 @@ decode_map_key(void* ctx, const unsigned char* data, unsigned int size)
         dec->error = enif_make_atom(dec->env, "invalid_internal_no_key_set");
         return ERROR;
     }
-    if(!enif_alloc_binary(dec->env, size, &bin))
+    if(!enif_alloc_binary_compat(dec->env, size, &bin))
     {
         dec->error = enif_make_atom(dec->env, "memory_error");
         return ERROR;

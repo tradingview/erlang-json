@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "erl_nif.h"
+#include "erl_nif_compat.h"
 #include "yajl/yajl_gen.h"
 
 #define OK 1
@@ -27,7 +28,7 @@ enc_atom(Encoder* enc, ERL_NIF_TERM atom)
     int ret = ERROR;
     char buf[512];
     
-    if(!enif_get_atom(enc->env, atom, buf, 512))
+    if(!enif_get_atom_compat(enc->env, atom, buf, 512))
     {
         enc->error = enif_make_atom(enc->env, "internal_atom_error");
         return ERROR;
@@ -110,7 +111,7 @@ enc_key(Encoder* enc, ERL_NIF_TERM key)
     
     if(enif_is_atom(enc->env, key))
     {
-        if(!enif_get_atom(enc->env, key, buf, 512))
+        if(!enif_get_atom_compat(enc->env, key, buf, 512))
         {
             enc->error = enif_make_atom(enc->env, "failed_getting_atom_key");
             return ERROR;
@@ -362,7 +363,7 @@ encode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
         goto done;
     }
     
-    if(!enif_alloc_binary(env, jsonlen, &bin))
+    if(!enif_alloc_binary_compat(env, jsonlen, &bin))
     {
         ret = enif_make_atom(env, "memory_error");
         goto done;
