@@ -3,7 +3,7 @@
 -on_load(init/0).
 
 init() ->
-    SoName = case code:priv_dir(eep0018) of
+    SoName = case code:priv_dir(json) of
         {error, bad_name} ->
             case filelib:is_dir(filename:join(["..", priv])) of
                 true ->
