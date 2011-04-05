@@ -1,3 +1,5 @@
+% This file is part of eep0018 released under the MIT license. 
+% See the LICENSE file for more information.
 -module(util).
 -export([test_good/1, test_errors/1]).
 

@@ -1,3 +1,6 @@
+// This file is part of eep0018 released under the MIT license. 
+// See the LICENSE file for more information.
+
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>

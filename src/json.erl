@@ -1,3 +1,5 @@
+% This file is part of eep0018 released under the MIT license. 
+% See the LICENSE file for more information.
 -module(json).
 -export([encode/1, decode/1, fuzz/0, fuzz/1]).
 -on_load(init/0).

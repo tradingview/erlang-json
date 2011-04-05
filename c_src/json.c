@@ -1,3 +1,6 @@
+// This file is part of eep0018 released under the MIT license. 
+// See the LICENSE file for more information.
+
 #include "erl_nif.h"
 
 ERL_NIF_TERM encode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[]);
