@@ -1,7 +1,7 @@
 eep0018
 =======
 
-Files: c_src/*.c c_src/*.h src/* test/*.t test/*.erl
+Files: c_src/*.c src/* test/*.t test/*.erl
 
 Copyright 2011 Paul J. Davis <paul.joseph.davis@gmail.com>
 
@@ -25,6 +25,27 @@ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
 WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
+
+erl_nif_compat.h
+================
+
+Files: c_src/erl_nif_compat.h
+
+Copyright (c) 2010-2011 Basho Technologies, Inc.
+
+This file is provided to you under the Apache License,
+Version 2.0 (the "License"); you may not use this file
+except in compliance with the License.  You may obtain
+a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
 
 Yajl
 ====
