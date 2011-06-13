@@ -5,18 +5,15 @@
 -on_load(init/0).
 
 init() ->
-    SoName = case code:priv_dir(json) of
-        {error, bad_name} ->
-            case filelib:is_dir(filename:join(["..", priv])) of
-                true ->
-                    filename:join(["..", priv, json]);
-                _ ->
-                    filename:join([priv, json])
-            end;
-        Dir ->
-            filename:join(Dir, json)
+    PrivDir = case code:priv_dir(?MODULE) of
+        {error, _} ->
+            EbinDir = filename:dirname(code:which(?MODULE)),
+            AppPath = filename:dirname(EbinDir),
+            filename:join(AppPath, "priv");
+        Path ->
+            Path
     end,
-    erlang:load_nif(SoName, 0).
+    erlang:load_nif(filename:join(PrivDir, "json"), 0).
 
 decode(_) ->
     not_loaded(?LINE).
