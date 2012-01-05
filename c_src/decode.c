@@ -366,17 +366,108 @@ check_rest(unsigned char* data, unsigned int size, unsigned int used)
     return OK;
 }
 
+static int
+parse_decode_opts(ErlNifEnv* env, yajl_parser_config* conf, ERL_NIF_TERM opts)
+{
+    ERL_NIF_TERM head, tail;
+    ERL_NIF_TERM key, value;
+    int ret;
+    ERL_NIF_TERM am_allow_comment;
+    ERL_NIF_TERM am_true;
+    ERL_NIF_TERM am_false;
+    int arity;
+    const ERL_NIF_TERM* array;
+
+    if( enif_is_empty_list(env, opts) )
+    {
+        return 0; /* success. */
+    }
+
+    am_allow_comment = enif_make_atom(env, "allow_comment");
+    am_true          = enif_make_atom(env, "true");
+    am_false         = enif_make_atom(env, "false");
+    ret = 0;
+    do
+    {
+        if( !enif_get_list_cell(env, opts, &head, &tail) )
+        {
+            ret = 1; /* failure. */
+            break;
+        }
+        opts = tail;
+
+        /* single Atom in options is treated as {Atom, true}. */
+        if( enif_is_atom(env, head) )
+        {
+            key   = head;
+            value = am_true;
+        }else if( enif_get_tuple(env, head, &arity, &array) )
+        {
+            /* {Atom, Value} pair. */
+            if( arity < 2 )
+            {
+                ret = 1; /* failure. */
+                break;
+            }
+            key   = array[0];
+            value = array[1];
+        }else
+        {
+            /* malformed option. */
+            ret = 1; /* failure. */
+            break;
+        }
+
+        if( key == am_allow_comment )
+        {
+            if( value == am_true )
+            {
+                conf->allowComments = 1;
+            }else if( value == am_false )
+            {
+                conf->allowComments = 0;
+            }else
+            {
+                ret = 1; /* failure. */
+                break;
+            }
+        }else
+        {
+            /* unknown option. */
+            ret = 1; /* failure. */
+            break;
+        }
+    } while( !enif_is_empty_list(env, opts) );
+ 
+    return ret;
+}
+
 ERL_NIF_TERM
 decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     Decoder dec;
-    yajl_parser_config conf = {0, 1}; // No comments, check utf8
-    yajl_handle handle = yajl_alloc(&decoder_callbacks, &conf, NULL, &dec);
+    yajl_parser_config conf;
+    yajl_handle handle;
     yajl_status status;
     unsigned int used;
     ErlNifBinary bin;
     ERL_NIF_TERM ret;
     
+    memset(&conf, 0, sizeof(conf));
+    conf.allowComments = 0; // No comments.
+    conf.checkUTF8     = 1; // check utf8.
+
+    if( argc == 2 )
+    {
+        if( parse_decode_opts(env, &conf, argv[1]) != 0 )
+        {
+            handle = NULL;
+            ret = enif_make_badarg(env);
+            goto done;
+        }
+    }
+    handle = yajl_alloc(&decoder_callbacks, &conf, NULL, &dec);
+
     if(handle == NULL)
     {
         ret = enif_make_tuple(env, 2,
@@ -386,7 +477,7 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
         goto done;
     }
 
-    if(argc != 1)
+    if(argc != 1 && argc != 2)
     {
         ret = enif_make_badarg(env);
         goto done;

@@ -1,8 +1,12 @@
 % This file is part of eep0018 released under the MIT license. 
 % See the LICENSE file for more information.
 -module(json).
--export([encode/1, decode/1, fuzz/0, fuzz/1]).
+-export([encode/1, decode/1, decode/2, fuzz/0, fuzz/1]).
+-export_type([decode_options/0]).
 -on_load(init/0).
+
+-type decode_options() :: [ decode_option() ].
+-type decode_option() :: allow_comment | {allow_comment, boolean()}.
 
 init() ->
     PrivDir = case code:priv_dir(?MODULE) of
@@ -16,6 +20,9 @@ init() ->
     erlang:load_nif(filename:join(PrivDir, "json"), 0).
 
 decode(_) ->
+    not_loaded(?LINE).
+
+decode(_, _) ->
     not_loaded(?LINE).
 
 encode(_) ->

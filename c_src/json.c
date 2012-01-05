@@ -27,7 +27,8 @@ on_upgrade(ErlNifEnv* env, void** priv_data, void** old_data, ERL_NIF_TERM info)
 static ErlNifFunc nif_funcs[] =
 {
     {"encode", 1, encode},
-    {"decode", 1, decode}
+    {"decode", 1, decode},
+    {"decode", 2, decode}
 };
 
 ERL_NIF_INIT(json, nif_funcs, &on_load, &on_reload, &on_upgrade, NULL);
