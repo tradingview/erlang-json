@@ -9,11 +9,11 @@ main([]) ->
     etap:plan(5),
 
     % allow comment requires explicit option.
-    etap:is(json:decode(<<"/* here is a comment. */ true">>, [allow_comment]), {ok, true}, "DEC: true (with comment/allowed) -> true"),
-    etap:is(json:decode(<<"/* here is a comment. */ true">>, [{allow_comment, true}]), {ok, true}, "DEC: true (with comment/allowed) -> true"),
+    etap:is(json:decode(<<"/* here is a comment. */ true">>, [allow_comments]), {ok, true}, "DEC: true (with comment/allowed) -> true"),
+    etap:is(json:decode(<<"/* here is a comment. */ true">>, [{allow_comments, true}]), {ok, true}, "DEC: true (with comment/allowed) -> true"),
 
     % deny comment explicitly.
-    etap:is(json:decode(<<"/* here is a comment. */ true">>, [{allow_comment, false}]), {error, {0, unallowed_comment}}, "DEC: true (with comment/denied) -> error/unallowed"),
+    etap:is(json:decode(<<"/* here is a comment. */ true">>, [{allow_comments, false}]), {error, {0, unallowed_comment}}, "DEC: true (with comment/denied) -> error/unallowed"),
 
     % default behavior denies comment.
     etap:is(json:decode(<<"/* here is a comment. */ true">>), {error, {0, unallowed_comment}}, "DEC: true (with comment/default) -> error/unallowed"),

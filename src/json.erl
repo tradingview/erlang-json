@@ -6,7 +6,7 @@
 -on_load(init/0).
 
 -type decode_options() :: [ decode_option() ].
--type decode_option() :: allow_comment | {allow_comment, boolean()}.
+-type decode_option() :: allow_comments | {allow_comments, boolean()}.
 
 init() ->
     PrivDir = case code:priv_dir(?MODULE) of

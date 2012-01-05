@@ -372,7 +372,7 @@ parse_decode_opts(ErlNifEnv* env, yajl_parser_config* conf, ERL_NIF_TERM opts)
     ERL_NIF_TERM head, tail;
     ERL_NIF_TERM key, value;
     int ret;
-    ERL_NIF_TERM am_allow_comment;
+    ERL_NIF_TERM am_allow_comments;
     ERL_NIF_TERM am_true;
     ERL_NIF_TERM am_false;
     int arity;
@@ -383,9 +383,9 @@ parse_decode_opts(ErlNifEnv* env, yajl_parser_config* conf, ERL_NIF_TERM opts)
         return 0; /* success. */
     }
 
-    am_allow_comment = enif_make_atom(env, "allow_comment");
-    am_true          = enif_make_atom(env, "true");
-    am_false         = enif_make_atom(env, "false");
+    am_allow_comments = enif_make_atom(env, "allow_comments");
+    am_true           = enif_make_atom(env, "true");
+    am_false          = enif_make_atom(env, "false");
     ret = 0;
     do
     {
@@ -418,7 +418,7 @@ parse_decode_opts(ErlNifEnv* env, yajl_parser_config* conf, ERL_NIF_TERM opts)
             break;
         }
 
-        if( key == am_allow_comment )
+        if( key == am_allow_comments )
         {
             if( value == am_true )
             {
