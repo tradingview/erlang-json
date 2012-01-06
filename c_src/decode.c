@@ -164,7 +164,7 @@ push_value(Decoder* dec, ERL_NIF_TERM val)
     new->slab[0] = val;
     new->used = 1;
     new->next = obj;
-    dec->stack[++dec->depth] = new;
+    dec->stack[dec->depth] = new;
     
     return OK;
 }
