@@ -19,19 +19,16 @@ init() ->
     end,
     erlang:load_nif(filename:join(PrivDir, "json"), 0).
 
-decode(_) ->
-    not_loaded(?LINE).
+decode(JsonText) ->
+    erlang:nif_error(module_not_loaded, [JsonText]).
 
-decode(_, _) ->
-    not_loaded(?LINE).
+decode(JsonText, Options) ->
+    erlang:nif_error(module_not_loaded, [JsonText, Options]).
 
-encode(_) ->
-    not_loaded(?LINE).
+encode(JsonTerm) ->
+    erlang:nif_error(module_not_loaded, [JsonTerm]).
 
 fuzz() ->
     json_fuzz:fuzz(fun json_fuzz:choose/4).
 fuzz(Chooser) ->
     json_fuzz:fuzz(Chooser).
-
-not_loaded(Line) ->
-    exit({json_not_loaded, module, ?MODULE, line, Line}).
