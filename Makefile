@@ -8,8 +8,10 @@ all:
 	@mkdir -p ebin
 	./rebar compile
 
-check: test/etap.beam test/util.beam
+check: test/etap.beam test/util.beam json
 	prove test/*.t
+json:
+	ln -s . json
 
 clean:
 	./rebar clean
