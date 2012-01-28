@@ -18,6 +18,10 @@
 #define WHERE \
     (fprintf(stderr, "(%s)%d:%s\r\n", __FILE__, __LINE__, __FUNCTION__))
 
+#define THE_NON_VALUE   ((ERL_NIF_TERM)0)
+#define is_non_value(v) ((v)==THE_NON_VALUE)
+#define is_value(v)     ((v)!=THE_NON_VALUE)
+
 // LIFO stack instead of lists:reverse/1
 #define OBJ_SLAB_SIZE   512
 typedef struct _obj
@@ -41,8 +45,9 @@ typedef struct
 void
 init_decoder(Decoder* dec, ErlNifEnv* env)
 {
-    dec->env = env;
-    dec->val = 0;
+    dec->env   = env;
+    dec->error = THE_NON_VALUE;
+    dec->val   = THE_NON_VALUE;
     dec->depth = -1;
     memset(dec->stack, '\0', sizeof(ERL_NIF_TERM) * MAX_DEPTH);
 }
@@ -131,7 +136,7 @@ push_value(Decoder* dec, ERL_NIF_TERM val)
     // Single value parsed
     if(dec->depth < 0)
     {
-        if(dec->val != 0) return ERROR;
+        if( is_value(dec->val) ) return ERROR;
         dec->val = val;
         return OK;
     }
@@ -139,10 +144,10 @@ push_value(Decoder* dec, ERL_NIF_TERM val)
     assert(dec->stack[dec->depth] != NULL);
     obj = dec->stack[dec->depth];
 
-    if(obj->key != 0)
+    if( is_value(obj->key) )
     {
         val = enif_make_tuple(dec->env, 2, obj->key, val);
-        obj->key = 0;
+        obj->key = THE_NON_VALUE;
     }
 
     // Room left in object slab
@@ -160,7 +165,7 @@ push_value(Decoder* dec, ERL_NIF_TERM val)
         return ERROR;
     }
     memset(new, '\0', sizeof(Object));
-    new->key = 0;
+    new->key = THE_NON_VALUE;
     new->slab[0] = val;
     new->used = 1;
     new->next = obj;
@@ -278,7 +283,7 @@ decode_start_obj(void* ctx)
         return ERROR;
     }
     memset(obj, '\0', sizeof(Object));
-    obj->key = 0;
+    obj->key = THE_NON_VALUE;
     obj->used = 0;
     obj->next = NULL;
     dec->stack[dec->depth] = obj;
@@ -296,7 +301,7 @@ decode_map_key(void* ctx, const unsigned char* data, unsigned int size)
         dec->error = enif_make_atom(dec->env, "invalid_internal_map_key_depth");
         return ERROR;
     }
-    if(dec->stack[dec->depth]->key != 0)
+    if( is_value(dec->stack[dec->depth]->key) )
     {
         dec->error = enif_make_atom(dec->env, "invalid_internal_no_key_set");
         return ERROR;
