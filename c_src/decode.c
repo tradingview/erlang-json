@@ -461,17 +461,25 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     
     init_decoder(&dec, env);
 
+    if( argc != 2 )
+    {
+        ret = enif_make_badarg(env);
+        goto done;
+    }
+    if( !enif_is_list(env, argv[1]) )
+    {
+        ret = enif_make_badarg(env);
+        goto done;
+    }
+
     memset(&conf, 0, sizeof(conf));
     conf.allowComments = 0; // No comments.
     conf.checkUTF8     = 1; // check utf8.
 
-    if( argc == 2 )
+    if( parse_decode_opts(env, &conf, argv[1]) != 0 )
     {
-        if( parse_decode_opts(env, &conf, argv[1]) != 0 )
-        {
-            ret = enif_make_badarg(env);
-            goto done;
-        }
+        ret = enif_make_badarg(env);
+        goto done;
     }
     dec.handle = yajl_alloc(&decoder_callbacks, &conf, NULL, &dec);
 
@@ -481,12 +489,6 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
             enif_make_atom(env, "error"),
             enif_make_atom(env, "memory_error")
         );
-        goto done;
-    }
-
-    if(argc != 1 && argc != 2)
-    {
-        ret = enif_make_badarg(env);
         goto done;
     }
 
