@@ -291,7 +291,7 @@ decode_map_key(void* ctx, const unsigned char* data, unsigned int size)
 {
     ErlNifBinary bin;
     Decoder* dec = (Decoder*) ctx;
-    if(dec->stack[dec->depth] < 0)
+    if( dec->depth < 0 )
     {
         dec->error = enif_make_atom(dec->env, "invalid_internal_map_key_depth");
         return ERROR;
