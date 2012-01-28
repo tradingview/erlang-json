@@ -19,6 +19,9 @@ typedef struct
     ErlNifEnv* env;
     yajl_gen handle;
     ERL_NIF_TERM error;
+    int           badvals_len;
+    ERL_NIF_TERM* badvals;
+    ERL_NIF_TERM  pre_encoded;
 } Encoder;
 
 int enc_json(Encoder* enc, ERL_NIF_TERM term);
@@ -306,11 +309,58 @@ enc_json(Encoder* enc, ERL_NIF_TERM term)
         }
     }
 
-    enc->error = enif_make_tuple(enc->env, 2,
-        enif_make_atom(enc->env, "badarg"),
-        term
-    );
-    return ERROR;
+    /* find term from preencoded values. */
+    {
+        ERL_NIF_TERM cell = enc->pre_encoded;
+        ErlNifBinary bin;
+        while( !enif_is_empty_list(enc->env, cell) )
+        {
+            ERL_NIF_TERM head;
+            ERL_NIF_TERM const* tuple;
+            int arity;
+            if( !enif_get_list_cell(enc->env, cell, &head, &cell) )
+            {
+                enc->error = enif_make_atom(enc->env, "badarg");
+                return ERROR;
+            }
+            if( !enif_get_tuple(enc->env, head, &arity, &tuple) )
+            {
+                enc->error = enif_make_atom(enc->env, "badarg");
+                return ERROR;
+            }
+            if( arity <  2 )
+            {
+                enc->error = enif_make_atom(enc->env, "badarg");
+                return ERROR;
+            }
+            if( tuple[0] != term )
+            {
+                continue;
+            }
+            if( !enif_is_binary(enc->env, tuple[1]) )
+            {
+                enc->error = enif_make_atom(enc->env, "badarg");
+                return ERROR;
+            }
+            if( !enif_inspect_binary(enc->env, tuple[1], &bin) )
+            {
+                enc->error = enif_make_atom(enc->env, "badarg");
+                return ERROR;
+            }
+            if( yajl_gen_number(enc->handle, (const char*)bin.data, bin.size) != yajl_gen_status_ok )
+            {
+                enc->error = enif_make_atom(enc->env, "failed_writing_number");
+                return ERROR;
+            }
+            return OK;
+        }
+    }
+
+    /* if not found, append to unknown values result. */
+    enc->badvals = enif_realloc_compat(enc->env, enc->badvals, sizeof(ERL_NIF_TERM)*(enc->badvals_len+1));
+    enc->badvals[enc->badvals_len] = term;
+    ++ enc->badvals_len;
+    return OK;
 }
 
 ERL_NIF_TERM
@@ -325,7 +375,14 @@ encode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     const unsigned char* json;
     unsigned int jsonlen;
     
-    if(argc != 1) goto done;
+    if( argc != 2 )
+    {
+        goto done;
+    }
+    if( !enif_is_list(env, argv[1]) )
+    {
+        goto done;
+    }
 
     if(handle == NULL)
     {
@@ -339,6 +396,9 @@ encode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     enc.env = env;
     enc.handle = handle;
     enc.error = 0;
+    enc.badvals_len = 0;
+    enc.badvals     = NULL;
+    enc.pre_encoded = argv[1];
     if(enc_json(&enc, argv[0]) == ERROR)
     {
         if(enc.error == 0)
@@ -353,6 +413,17 @@ encode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
             enif_make_atom(env, "error"),
             ret
         );
+        goto done;
+    }
+    if( enc.badvals_len != 0 )
+    {
+        int i;
+        ret = enif_make_list(env, 0);
+        for( i=enc.badvals_len-1; i>=0; --i )
+        {
+            ret = enif_make_list_cell(env, enc.badvals[i], ret);
+        }
+        ret = enif_make_tuple(env, 2, enif_make_atom(env, "badvals"), ret);
         goto done;
     }
 
@@ -381,5 +452,9 @@ encode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 done:
     if(handle != NULL) yajl_gen_free(handle);
+    if( enc.badvals != NULL )
+    {
+        enif_free_compat(env, enc.badvals);
+    }
     return ret;
 }

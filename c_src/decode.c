@@ -2,7 +2,12 @@
 // See the LICENSE file for more information.
 
 #include <assert.h>
+#include <ctype.h>
+#include <errno.h>
+#include <limits.h>
+#include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "erl_nif.h"
@@ -21,6 +26,16 @@
 #define THE_NON_VALUE   ((ERL_NIF_TERM)0)
 #define is_non_value(v) ((v)==THE_NON_VALUE)
 #define is_value(v)     ((v)!=THE_NON_VALUE)
+
+#ifdef HUGE_VAL
+/* HUGE_VALL and HUGE_VALF are defined in C99:<math.h> */
+#  ifndef HUGE_VALL
+#    define HUGE_VALL HUGE_VAL
+#  endif
+#  ifndef HUGE_VALF
+#    define HUGE_VALF (-HUGE_VAL)
+#  endif
+#endif
 
 // LIFO stack instead of lists:reverse/1
 #define OBJ_SLAB_SIZE   512
@@ -41,16 +56,22 @@ typedef struct
     Object*         stack[MAX_DEPTH];
     int             depth;
     yajl_handle     handle;
+    int             badvals_len;
+    ERL_NIF_TERM*   badvals;
+    ERL_NIF_TERM    pre_decoded;
 } Decoder;
 
 void
-init_decoder(Decoder* dec, ErlNifEnv* env)
+init_decoder(Decoder* dec, ErlNifEnv* env, ERL_NIF_TERM pre_decoded)
 {
     dec->env   = env;
     dec->error = THE_NON_VALUE;
     dec->val   = THE_NON_VALUE;
     dec->depth = -1;
     dec->handle = NULL;
+    dec->badvals_len = 0;
+    dec->badvals     = NULL;
+    dec->pre_decoded = pre_decoded;
     memset(dec->stack, '\0', sizeof(ERL_NIF_TERM) * MAX_DEPTH);
 }
 
@@ -247,6 +268,130 @@ decode_double(void* ctx, double val)
 }
 
 static int
+decode_bigval(Decoder* dec, const char* buf, long len)
+{
+    ERL_NIF_TERM cell = dec->pre_decoded;
+    ErlNifBinary bin;
+
+    /* find term from predecoded values. */
+    while( !enif_is_empty_list(dec->env, cell) )
+    {
+        ERL_NIF_TERM head;
+        ERL_NIF_TERM const* tuple;
+        int arity;
+        if( !enif_get_list_cell(dec->env, cell, &head, &cell) )
+        {
+            dec->error = enif_make_atom(dec->env, "badarg");
+            return ERROR;
+        }
+        if( !enif_get_tuple(dec->env, head, &arity, &tuple) )
+        {
+            dec->error = enif_make_atom(dec->env, "badarg");
+            return ERROR;
+        }
+        if( arity <  2 )
+        {
+            dec->error = enif_make_atom(dec->env, "badarg");
+            return ERROR;
+        }
+        if( !enif_is_binary(dec->env, tuple[0]) )
+        {
+            dec->error = enif_make_atom(dec->env, "badarg");
+            return ERROR;
+        }
+        if( !enif_inspect_binary(dec->env, tuple[0], &bin) )
+        {
+            dec->error = enif_make_atom(dec->env, "badarg");
+            return ERROR;
+        }
+        if( bin.size != len || memcmp(bin.data, buf, len) != 0 )
+        {
+            /* not match. */
+            continue;
+        }
+        /* match. */
+        return push_value(dec, tuple[1]);
+    }
+
+    /* if not found, append to unknown values result. */
+    {
+        ErlNifBinary bin;
+        ERL_NIF_TERM atom_term;
+        ERL_NIF_TERM bin_term;
+        ERL_NIF_TERM pos_term;
+        ERL_NIF_TERM term;
+
+        if( !enif_alloc_binary(len, &bin) )
+        {
+            dec->error = enif_make_atom(dec->env, "alloc_binary");
+            return ERROR;
+        }
+        memcpy(bin.data, buf, len);
+        bin_term = enif_make_binary(dec->env, &bin);
+
+        pos_term = enif_make_uint(dec->env, dec->handle->bytesConsumed);
+
+        atom_term = enif_make_atom(dec->env, "bigval");
+        term = enif_make_tuple(dec->env, 3, atom_term, bin_term, pos_term);
+        dec->badvals = enif_realloc_compat(dec->env, dec->badvals, sizeof(ERL_NIF_TERM)*(dec->badvals_len+1));
+        dec->badvals[dec->badvals_len] = term;
+        ++ dec->badvals_len;
+    }
+    return OK;
+}
+
+static int
+decode_number(void* ctx, const char* buf, unsigned int len)
+{
+    Decoder* dec = (Decoder*) ctx;
+    char bufz[22];
+    char* endp;
+    long int lval;
+    double dval;
+
+    /* copy as numm-terminated text. */
+    if( len >  sizeof(bufz)-1 )
+    {
+        return decode_bigval(dec, buf, len);
+    }
+    memcpy(bufz, buf, len);
+    bufz[len] = '\0';
+
+    /* at first, try decoding as integer. */
+    lval = strtol(bufz, &endp, 10);
+    if( *endp == '\0' )
+    {
+        if( (lval == LONG_MIN || lval == LONG_MAX) && errno == ERANGE )
+        {
+            return decode_bigval(dec, buf, len);
+        }
+        return decode_integer(dec, lval);
+    }
+    while(*endp && isdigit(*endp) )
+    {
+        ++ endp;
+    }
+    if( *endp == '\0' )
+    {
+        return decode_bigval(dec, buf, len);
+    }
+
+    /* next, try decoding as integer. */
+    dval = strtod(bufz, &endp);
+    if( *endp == '\0' )
+    {
+        if( (dval == HUGE_VALF || dval == HUGE_VALL) && errno == ERANGE )
+        {
+            return decode_bigval(dec, buf, len);
+        }
+        return decode_double(dec, dval);
+    }
+
+    /* both failed, append unknown values result. */
+    return decode_bigval(dec, buf, len);
+}
+
+static int
 decode_string(void* ctx, const unsigned char* data, unsigned int size)
 {
     ErlNifBinary bin;
@@ -341,14 +486,14 @@ static yajl_callbacks
 decoder_callbacks = {
     decode_null,
     decode_boolean,
-    decode_integer,
-    decode_double,
-    NULL,
+    NULL, /* yajl_integer */
+    NULL, /* yajl_double  */
+    decode_number,
     decode_string,
-    decode_start_obj,
+    decode_start_obj, /* yajl_start_map. */
     decode_map_key,
     decode_end_map,
-    decode_start_obj,
+    decode_start_obj, /* yajl_start_array. */
     decode_end_array
 };
 
@@ -374,7 +519,7 @@ check_rest(unsigned char* data, unsigned int size, unsigned int used)
 }
 
 static int
-parse_decode_opts(ErlNifEnv* env, yajl_parser_config* conf, ERL_NIF_TERM opts)
+parse_decode_opts(ErlNifEnv* env, Decoder* dec, yajl_parser_config* conf, ERL_NIF_TERM opts)
 {
     ERL_NIF_TERM head, tail;
     ERL_NIF_TERM key, value;
@@ -459,9 +604,9 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     ErlNifBinary bin;
     ERL_NIF_TERM ret;
     
-    init_decoder(&dec, env);
+    init_decoder(&dec, env, argv[2]);
 
-    if( argc != 2 )
+    if( argc != 3 )
     {
         ret = enif_make_badarg(env);
         goto done;
@@ -471,12 +616,17 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
         ret = enif_make_badarg(env);
         goto done;
     }
+    if( !enif_is_list(env, argv[2]) )
+    {
+        ret = enif_make_badarg(env);
+        goto done;
+    }
 
     memset(&conf, 0, sizeof(conf));
     conf.allowComments = 0; // No comments.
     conf.checkUTF8     = 1; // check utf8.
 
-    if( parse_decode_opts(env, &conf, argv[1]) != 0 )
+    if( parse_decode_opts(env, &dec, &conf, argv[1]) != 0 )
     {
         ret = enif_make_badarg(env);
         goto done;
@@ -525,8 +675,21 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     switch(status)
     {
         case yajl_status_ok:
-            ret = enif_make_tuple(env, 2, enif_make_atom(env, "ok"), dec.val);
-            goto done;
+            if( dec.badvals_len != 0 )
+            {
+                int i;
+                ret = enif_make_list(env, 0);
+                for( i=dec.badvals_len-1; i>=0; --i )
+                {
+                    ret = enif_make_list_cell(env, dec.badvals[i], ret);
+                }
+                ret = enif_make_tuple(env, 2, enif_make_atom(env, "badvals"), ret);
+                goto done;
+            }else
+            {
+                ret = enif_make_tuple(env, 2, enif_make_atom(env, "ok"), dec.val);
+                goto done;
+            }
 
         case yajl_status_error:
             ret = make_error(dec.handle, env);
@@ -559,5 +722,9 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 
 done:
     if(dec.handle != NULL) yajl_free(dec.handle);
+    if( dec.badvals != NULL )
+    {
+        enif_free_compat(env, dec.badvals);
+    }
     return ret;
 }

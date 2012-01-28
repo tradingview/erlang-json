@@ -53,27 +53,119 @@ decode(JsonText) ->
 
 -spec decode(text(), decode_options()) -> {ok, value()} | {error, term()}.
 decode(JsonText, Options) ->
-    case decode_nif(JsonText, Options) of
+    case decode_nif(JsonText, Options, []) of
+        {ok, Value} ->
+            {ok, Value};
+        {badvals, BadValues} ->
+            decode_retry(JsonText, Options, BadValues);
+        {error, _Reason} = Err ->
+            Err
+    end.
+
+-type predecoded_values() :: [{binary(), term()}].
+-type position() :: non_neg_integer().
+-spec decode_nif(text(), decode_options(), predecoded_values())
+    -> {ok, value()} | {error, term()} | {badvals, [{bigval, text(), position()}]}.
+decode_nif(JsonText, Options, PreDecodedValues) ->
+    erlang:nif_error(module_not_loaded, [JsonText, Options, PreDecodedValues]).
+
+decode_retry(JsonTerm, Options, Values) ->
+    case pre_decode(Values) of
+        {ok, PreDecodedValues} ->
+            decode_retry_2(JsonTerm, Options, PreDecodedValues);
+        {error, _Reason} = Err ->
+            Err
+    end.
+
+decode_retry_2(JsonTerm, Options, PreDecodedValues) ->
+    case decode_nif(JsonTerm, Options, PreDecodedValues) of
         {ok, Value} ->
             {ok, Value};
         {error, _Reason} = Err ->
             Err
     end.
 
--spec decode_nif(text(), decode_options()) -> {ok, value()} | {error, term()}.
-decode_nif(JsonText, Options) ->
-    erlang:nif_error(module_not_loaded, [JsonText, Options]).
+pre_decode(Values) ->
+    pre_decode(Values, []).
+pre_decode([{bigval, Text, Pos} | Rest], Result) ->
+    Text_2 = binary_to_list(Text),
+    try
+        list_to_integer(Text_2)
+    of
+        Value ->
+            Result_2 = [{Text, Value}| Result],
+            pre_decode(Rest, Result_2)
+    catch
+        error:badarg ->
+            try
+                list_to_float(Text_2)
+            of
+                Value ->
+                    Result_2 = [{Text, Value}| Result],
+                    pre_decode(Rest, Result_2)
+            catch
+                error:badarg ->
+                    case re:run(Text, "^(\\d+)(e[-+]?\\d+)$",[dollar_endonly, {capture, all_but_first, list}]) of
+                        {match, [Int, Exp]} ->
+                            try
+                                list_to_float(Int++".0"++Exp)
+                            of
+                                Value ->
+                                    Result_2 = [{Text, Value}| Result],
+                                    pre_decode(Rest, Result_2)
+                            catch
+                                error:badarg ->
+                                   {error, {Pos, numeric_overflow, Text}}
+                            end;
+                        nomatch ->
+                            {error, {Pos, numeric_overflow, Text}}
+                    end
+            end
+    end;
+pre_decode([], Result) ->
+    {ok, lists:reverse(Result)}.
+
 
 -spec encode(value()) -> {ok, text()} | {error, term()}.
 encode(JsonTerm) ->
-    case encode_nif(JsonTerm) of
+    case encode_nif(JsonTerm, []) of
+        {ok, Value} ->
+            {ok, Value};
+        {badvals, BadValues} ->
+            encode_retry(JsonTerm, BadValues);
+        {error, _Reason} = Err ->
+            Err
+    end.
+
+-type preencoded_values() :: [{term(), binary()}].
+-spec encode_nif(value(), preencoded_values())
+    -> {ok, text()} | {error, term()} | {badvals, [value()]}.
+encode_nif(JsonTerm, PreEncodedValues) ->
+    erlang:nif_error(module_not_loaded, [JsonTerm, PreEncodedValues]).
+
+encode_retry(JsonTerm, Values) ->
+    case pre_encode(Values) of
+        {ok, PreEncodedValues} ->
+            encode_retry_2(JsonTerm, PreEncodedValues);
+        {error, _Reason} = Err ->
+            Err
+    end.
+
+encode_retry_2(JsonTerm, PreEncodedValues) ->
+    case encode_nif(JsonTerm, PreEncodedValues) of
         {ok, Value} ->
             {ok, Value};
         {error, _Reason} = Err ->
             Err
     end.
 
--spec encode_nif(value()) -> {ok, text()} | {error, term()}.
-encode_nif(JsonTerm) ->
-    erlang:nif_error(module_not_loaded, [JsonTerm]).
-
+pre_encode(Values) ->
+    pre_encode(Values, []).
+pre_encode([Value | Rest], Result) when is_integer(Value) ->
+    Text = list_to_binary(integer_to_list(Value)),
+    Result_2 = [{Value, Text}| Result],
+    pre_encode(Rest, Result_2);
+pre_encode([Value | _Rest], _Result) ->
+    {error, {badarg, Value}};
+pre_encode([], Result) ->
+    {ok, lists:reverse(Result)}.
