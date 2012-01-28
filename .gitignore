@@ -2,3 +2,4 @@
 *.so
 *.beam
 ebin/*
+*.swp
