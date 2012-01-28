@@ -13,4 +13,4 @@ check: test/etap.beam test/util.beam
 
 clean:
 	./rebar clean
-	rm test/*.beam
+	rm -f test/*.beam
