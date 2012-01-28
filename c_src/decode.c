@@ -40,6 +40,7 @@ typedef struct
     ERL_NIF_TERM    val;
     Object*         stack[MAX_DEPTH];
     int             depth;
+    yajl_handle     handle;
 } Decoder;
 
 void
@@ -49,6 +50,7 @@ init_decoder(Decoder* dec, ErlNifEnv* env)
     dec->error = THE_NON_VALUE;
     dec->val   = THE_NON_VALUE;
     dec->depth = -1;
+    dec->handle = NULL;
     memset(dec->stack, '\0', sizeof(ERL_NIF_TERM) * MAX_DEPTH);
 }
 
@@ -452,12 +454,13 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     Decoder dec;
     yajl_parser_config conf;
-    yajl_handle handle;
     yajl_status status;
     unsigned int used;
     ErlNifBinary bin;
     ERL_NIF_TERM ret;
     
+    init_decoder(&dec, env);
+
     memset(&conf, 0, sizeof(conf));
     conf.allowComments = 0; // No comments.
     conf.checkUTF8     = 1; // check utf8.
@@ -466,14 +469,13 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     {
         if( parse_decode_opts(env, &conf, argv[1]) != 0 )
         {
-            handle = NULL;
             ret = enif_make_badarg(env);
             goto done;
         }
     }
-    handle = yajl_alloc(&decoder_callbacks, &conf, NULL, &dec);
+    dec.handle = yajl_alloc(&decoder_callbacks, &conf, NULL, &dec);
 
-    if(handle == NULL)
+    if(dec.handle == NULL)
     {
         ret = enif_make_tuple(env, 2,
             enif_make_atom(env, "error"),
@@ -494,9 +496,8 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
         goto done;
     }
     
-    init_decoder(&dec, env);
-    status = yajl_parse(handle, bin.data, bin.size);
-    used = handle->bytesConsumed;
+    status = yajl_parse(dec.handle, bin.data, bin.size);
+    used = dec.handle->bytesConsumed;
     destroy_decoder(&dec, env);
 
     // Parsing something like "2.0" (without quotes) will
@@ -504,7 +505,7 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     // check so that "2008-20-10" doesn't pass.
     if(status == yajl_status_insufficient_data && used == bin.size)
     {
-        status = yajl_parse_complete(handle);
+        status = yajl_parse_complete(dec.handle);
     }
 
     if(status == yajl_status_ok && used != bin.size)
@@ -526,7 +527,7 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
             goto done;
 
         case yajl_status_error:
-            ret = make_error(handle, env);
+            ret = make_error(dec.handle, env);
             goto done;
 
         case yajl_status_insufficient_data:
@@ -540,7 +541,7 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
             ret = enif_make_tuple(env, 2,
                 enif_make_atom(env, "error"),
                 enif_make_tuple(env, 2,
-                    enif_make_uint(env, handle->bytesConsumed),
+                    enif_make_uint(env, dec.handle->bytesConsumed),
                     dec.error
                 )
             );
@@ -555,6 +556,6 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     }
 
 done:
-    if(handle != NULL) yajl_free(handle);
+    if(dec.handle != NULL) yajl_free(dec.handle);
     return ret;
 }
