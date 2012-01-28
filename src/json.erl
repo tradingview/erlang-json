@@ -32,6 +32,7 @@
 -type decode_option()  ::
         allow_comments
       | {allow_comments, boolean()}
+      | {key_decode, existent_atom | binary | [existent_atom | binary | ignore]}
       .
 
 -type encode_options() :: [].

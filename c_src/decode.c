@@ -37,6 +37,12 @@
 #  endif
 #endif
 
+typedef enum _value_ignore {
+    ign_none,
+    ign_next,
+    ign_all
+} value_ignore;
+
 // LIFO stack instead of lists:reverse/1
 #define OBJ_SLAB_SIZE   512
 typedef struct _obj
@@ -44,8 +50,17 @@ typedef struct _obj
     ERL_NIF_TERM    key;
     ERL_NIF_TERM    slab[OBJ_SLAB_SIZE];
     short           used;
+    short           ignore;
     struct _obj*    next;
 } Object; // Map or Array
+
+typedef enum _key_decode {
+    /* bitwise-or of binary=1, existent_atom=2, ignore=4. */
+    key_binary        = 1,
+    key_existent_atom = 2,
+    key_existent_atom_or_binary = 3,
+    key_existent_atom_or_ignore = 6
+} key_decode;
 
 // Depth stack to handle nested objects
 typedef struct
@@ -56,6 +71,7 @@ typedef struct
     Object*         stack[MAX_DEPTH];
     int             depth;
     yajl_handle     handle;
+    key_decode      key_decode;
     int             badvals_len;
     ERL_NIF_TERM*   badvals;
     ERL_NIF_TERM    pre_decoded;
@@ -69,6 +85,7 @@ init_decoder(Decoder* dec, ErlNifEnv* env, ERL_NIF_TERM pre_decoded)
     dec->val   = THE_NON_VALUE;
     dec->depth = -1;
     dec->handle = NULL;
+    dec->key_decode  = key_binary;
     dec->badvals_len = 0;
     dec->badvals     = NULL;
     dec->pre_decoded = pre_decoded;
@@ -166,6 +183,19 @@ push_value(Decoder* dec, ERL_NIF_TERM val)
     
     assert(dec->stack[dec->depth] != NULL);
     obj = dec->stack[dec->depth];
+
+    switch( obj->ignore )
+    {
+    case ign_none:
+        break;
+    case ign_next:
+        obj->key    = THE_NON_VALUE;
+        obj->ignore = ign_none;
+        return OK;
+    case ign_all:
+        obj->key = THE_NON_VALUE;
+        return OK;
+    }
 
     if( is_value(obj->key) )
     {
@@ -439,9 +469,36 @@ decode_start_obj(void* ctx)
 }
 
 static int
-decode_map_key(void* ctx, const unsigned char* data, unsigned int size)
+decoder_make_binary(Decoder* dec, const unsigned char* data, unsigned int size, ERL_NIF_TERM* p_term)
 {
     ErlNifBinary bin;
+    if(!enif_alloc_binary_compat(dec->env, size, &bin))
+    {
+        dec->error = enif_make_atom(dec->env, "memory_error");
+        return 0; /* false. */
+    }
+    memcpy(bin.data, data, size);
+    *p_term = enif_make_binary(dec->env, &bin);
+    return 1; /* true. */
+}
+
+static int
+is_7bit_data(const unsigned char* data, unsigned int len)
+{
+    unsigned int i;
+    for( i=0; i<len; ++i )
+    {
+        if( data[i] & ~127 )
+        {
+            return 0; /* false. */
+        }
+    }
+    return 1; /* true. */
+}
+
+static int
+decode_map_key(void* ctx, const unsigned char* data, unsigned int size)
+{
     Decoder* dec = (Decoder*) ctx;
     if( dec->depth < 0 )
     {
@@ -453,13 +510,62 @@ decode_map_key(void* ctx, const unsigned char* data, unsigned int size)
         dec->error = enif_make_atom(dec->env, "invalid_internal_no_key_set");
         return ERROR;
     }
-    if(!enif_alloc_binary_compat(dec->env, size, &bin))
+
+    switch( dec->key_decode )
     {
-        dec->error = enif_make_atom(dec->env, "memory_error");
-        return ERROR;
+    case key_binary:
+        break;
+    case key_existent_atom:
+    case key_existent_atom_or_binary:
+    case key_existent_atom_or_ignore:
+        {
+            int acceptable = is_7bit_data(data, size);
+            if( acceptable )
+            {
+                ERL_NIF_TERM atom_key;
+                if( enif_make_existing_atom_len(dec->env, (const char*)data, size, &atom_key, ERL_NIF_LATIN1) )
+                {
+                    dec->stack[dec->depth]->key = atom_key;
+                    return OK;
+                }
+            }
+            /* not exist/not acceptable. */
+            if( dec->key_decode == key_existent_atom )
+            {
+                ERL_NIF_TERM reason;
+                ERL_NIF_TERM bin_term;
+                if( !decoder_make_binary(dec, data, size, &bin_term) )
+                {
+                    return ERROR;
+                }
+                if( acceptable )
+                {
+                    reason = enif_make_atom(dec->env, "atom_not_exist");
+                }else
+                {
+                    reason = enif_make_atom(dec->env, "not_acceptable_as_atom");
+                }
+                dec->error = enif_make_tuple(dec->env, 2, reason, bin_term);
+                return ERROR;
+            }
+            if( dec->key_decode == key_existent_atom_or_ignore )
+            {
+                dec->stack[dec->depth]->key    = THE_NON_VALUE;
+                dec->stack[dec->depth]->ignore = ign_next;
+                return OK;
+            }
+            break;
+        }
     }
-    memcpy(bin.data, data, size);
-    dec->stack[dec->depth]->key = enif_make_binary(dec->env, &bin);
+
+    {
+        ERL_NIF_TERM binary_key;
+        if( !decoder_make_binary(dec, data, size, &binary_key) )
+        {
+            return ERROR;
+        }
+        dec->stack[dec->depth]->key = binary_key;
+    }
     return OK;
 }
 
@@ -527,6 +633,10 @@ parse_decode_opts(ErlNifEnv* env, Decoder* dec, yajl_parser_config* conf, ERL_NI
     ERL_NIF_TERM am_allow_comments;
     ERL_NIF_TERM am_true;
     ERL_NIF_TERM am_false;
+    ERL_NIF_TERM am_key_decode;
+    ERL_NIF_TERM am_existent_atom;
+    ERL_NIF_TERM am_binary;
+    ERL_NIF_TERM am_ignore;
     int arity;
     const ERL_NIF_TERM* array;
 
@@ -538,6 +648,10 @@ parse_decode_opts(ErlNifEnv* env, Decoder* dec, yajl_parser_config* conf, ERL_NI
     am_allow_comments = enif_make_atom(env, "allow_comments");
     am_true           = enif_make_atom(env, "true");
     am_false          = enif_make_atom(env, "false");
+    am_key_decode     = enif_make_atom(env, "key_decode");
+    am_existent_atom  = enif_make_atom(env, "existent_atom");
+    am_binary         = enif_make_atom(env, "binary");
+    am_ignore         = enif_make_atom(env, "ignore");
     ret = 0;
     do
     {
@@ -580,6 +694,63 @@ parse_decode_opts(ErlNifEnv* env, Decoder* dec, yajl_parser_config* conf, ERL_NI
                 conf->allowComments = 0;
             }else
             {
+                ret = 1; /* failure. */
+                break;
+            }
+        }else if( key == am_key_decode )
+        {
+            ERL_NIF_TERM term_1, term_2;
+            if( value == am_binary )
+            {
+                dec->key_decode = key_binary;
+            }else if( value == am_existent_atom )
+            {
+                dec->key_decode = key_existent_atom;
+            }else if( enif_get_list_cell(dec->env, value, &term_1, &value) )
+            {
+                if( !enif_get_list_cell(dec->env, value, &term_2, &value) )
+                {
+                    term_2 = THE_NON_VALUE;
+                }
+                if( !enif_is_empty_list(dec->env, value) )
+                {
+                    ret = 1; /* failure. */
+                    break;
+                }
+                /* valid values are: [binary], [existent_atom], 
+                 * [existent_atom, binary], [existent_atom, ignore]. */
+                if( term_1 == am_binary )
+                {
+                    if( is_value(term_2) )
+                    {
+                        ret = 1; /* failure. */
+                        break;
+                    }
+                    dec->key_decode = key_binary;
+                }else if( term_1 == am_existent_atom )
+                {
+                    if( term_2 == am_binary )
+                    {
+                        dec->key_decode = key_existent_atom_or_binary;
+                    }else if( term_2 == am_ignore )
+                    {
+                        dec->key_decode = key_existent_atom_or_ignore;
+                    }else if( is_non_value(term_2) )
+                    {
+                        dec->key_decode = key_existent_atom;
+                    }else
+                    {
+                        ret = 1; /* failure. */
+                        break;
+                    }
+                }else
+                {
+                    ret = 1; /* failure. */
+                    break;
+                }
+            }else
+            {
+                /* malformed key_decode option. */
                 ret = 1; /* failure. */
                 break;
             }
