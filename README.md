@@ -1,4 +1,4 @@
-erlang-eep0018
+erlang-json
 ==============
 
 Json library for Erlang.
@@ -11,7 +11,7 @@ Features
 * can decode map key in atom (default is binary).
 * implemented in NIF.
 * c-style comments acceptable (/* ... */) (default is denied).
-* bigint supported.
+* bigint supported (larger than 64bit word).
 
 Compiling
 ---------
