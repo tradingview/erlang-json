@@ -46,4 +46,4 @@ Yeah. It's that easy.
 Repository
 ----------
 
-* https://github.com/hio/erlang-eep0018
+* https://github.com/hio/erlang-json
