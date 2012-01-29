@@ -161,7 +161,7 @@ make_error(yajl_handle handle, ErlNifEnv* env)
     return enif_make_tuple(env, 2,
         enif_make_atom(env, "error"),
         enif_make_tuple(env, 2,
-            enif_make_uint(env, handle->bytesConsumed),
+            enif_make_uint(env, yajl_get_bytes_consumed(handle)),
             atom
         )
     );
@@ -359,7 +359,7 @@ decode_bigval(Decoder* dec, const char* buf, long len)
         memcpy(bin.data, buf, len);
         bin_term = enif_make_binary(dec->env, &bin);
 
-        pos_term = enif_make_uint(dec->env, dec->handle->bytesConsumed);
+        pos_term = enif_make_uint(dec->env, yajl_get_bytes_consumed(dec->handle));
 
         atom_term = enif_make_atom(dec->env, "bigval");
         term = enif_make_tuple(dec->env, 3, atom_term, bin_term, pos_term);
@@ -820,7 +820,7 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     }
     
     status = yajl_parse(dec.handle, bin.data, bin.size);
-    used = dec.handle->bytesConsumed;
+    used = yajl_get_bytes_consumed(dec.handle);
     destroy_decoder(&dec, env);
 
     // Parsing something like "2.0" (without quotes) will
@@ -877,7 +877,7 @@ decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
             ret = enif_make_tuple(env, 2,
                 enif_make_atom(env, "error"),
                 enif_make_tuple(env, 2,
-                    enif_make_uint(env, dec.handle->bytesConsumed),
+                    enif_make_uint(env, yajl_get_bytes_consumed(dec.handle)),
                     dec.error
                 )
             );
