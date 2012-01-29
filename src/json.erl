@@ -45,15 +45,28 @@
 
 -type encode_options() :: [].
 
-init() ->
-    PrivDir = case code:priv_dir(?MODULE) of
+nif_dir() ->
+    case os:getenv("JSON_NIF_DIR") of
+        false ->
+            nif_dir_2();
+        "" ->
+            nif_dir_2();
+        Path ->
+            Path
+    end.
+
+nif_dir_2() ->
+    case code:priv_dir(?MODULE) of
         {error, _} ->
             EbinDir = filename:dirname(code:which(?MODULE)),
             AppPath = filename:dirname(EbinDir),
             filename:join(AppPath, "priv");
         Path ->
             Path
-    end,
+    end.
+
+init() ->
+    PrivDir = nif_dir(),
     erlang:load_nif(filename:join(PrivDir, "json"), 0).
 
 -spec decode(text()) -> {ok, value()} | {error, decode_error()}.
