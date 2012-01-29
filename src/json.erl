@@ -3,7 +3,9 @@
 -module(json).
 -export([encode/1, decode/1, decode/2]).
 -export_type([decode_options/0]).
+-export_type([decode_error/0]).
 -export_type([encode_options/0]).
+-export_type([encode_error/0]).
 -export_type([value/0]).
 -export_type([object/2]).
 -export_type([key/0]).
@@ -11,6 +13,7 @@
 -export_type([json_string/0]).
 -export_type([json_number/0]).
 -export_type([text/0]).
+-export_type([binary_text/0]).
 
 -on_load(init/0).
 
@@ -22,11 +25,16 @@
                | null
                .
 -type object(K,T)   :: {[ {K, T} ]}.
--type key()         :: json_string().
+-type key()         :: json_string() | atom().
 -type array(T)      :: [T].
 -type json_string() :: unicode:unicode_binary().
 -type json_number() :: integer() | float().
--type text()        :: iodata().
+
+-type text()        :: unicode:chardata().
+-type binary_text() :: unicode:unicode_binary().
+
+-type decode_error() :: term().
+-type encode_error() :: term().
 
 -type decode_options() :: [ decode_option() ].
 -type decode_option()  ::
@@ -48,11 +56,11 @@ init() ->
     end,
     erlang:load_nif(filename:join(PrivDir, "json"), 0).
 
--spec decode(text()) -> {ok, value()} | {error, term()}.
+-spec decode(text()) -> {ok, value()} | {error, decode_error()}.
 decode(JsonText) ->
     decode(JsonText, []).
 
--spec decode(text(), decode_options()) -> {ok, value()} | {error, term()}.
+-spec decode(text(), decode_options()) -> {ok, value()} | {error, decode_error()}.
 decode(JsonText, Options) ->
     case decode_nif(JsonText, Options, []) of
         {ok, Value} ->
@@ -66,7 +74,7 @@ decode(JsonText, Options) ->
 -type predecoded_values() :: [{binary(), term()}].
 -type position() :: non_neg_integer().
 -spec decode_nif(text(), decode_options(), predecoded_values())
-    -> {ok, value()} | {error, term()} | {badvals, [{bigval, text(), position()}]}.
+    -> {ok, value()} | {error, decode_error()} | {badvals, [{bigval, binary_text(), position()}]}.
 decode_nif(JsonText, Options, PreDecodedValues) ->
     erlang:nif_error(module_not_loaded, [JsonText, Options, PreDecodedValues]).
 
@@ -127,7 +135,7 @@ pre_decode([], Result) ->
     {ok, lists:reverse(Result)}.
 
 
--spec encode(value()) -> {ok, text()} | {error, term()}.
+-spec encode(value()) -> {ok, binary_text()} | {error, encode_error()}.
 encode(JsonTerm) ->
     case encode_nif(JsonTerm, []) of
         {ok, Value} ->
@@ -140,7 +148,7 @@ encode(JsonTerm) ->
 
 -type preencoded_values() :: [{term(), binary()}].
 -spec encode_nif(value(), preencoded_values())
-    -> {ok, text()} | {error, term()} | {badvals, [value()]}.
+    -> {ok, binary_text()} | {error, encode_error()} | {badvals, [value()]}.
 encode_nif(JsonTerm, PreEncodedValues) ->
     erlang:nif_error(module_not_loaded, [JsonTerm, PreEncodedValues]).
 
