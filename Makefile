@@ -3,6 +3,8 @@
 
 top_builddir := `pwd`
 
+.PHONY: doc
+
 %.beam: %.erl
 	erlc -o test/ $<
 
@@ -19,3 +21,6 @@ check: test/etap.beam test/util.beam
 clean:
 	./rebar clean
 	rm -f test/*.beam
+
+doc:
+	./rebar doc

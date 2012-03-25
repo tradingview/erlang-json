@@ -1,5 +1,6 @@
 % This file is part of eep0018 released under the MIT license. 
 % See the LICENSE file for more information.
+%% @private
 -module(json_fuzz).
 
 -export([fuzz/0, fuzz/1, choose/4]).

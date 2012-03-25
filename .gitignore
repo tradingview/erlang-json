@@ -1,5 +1,9 @@
 .eunit
 
+# auto-generated files.
+deps
+
+# temporary files.
 *.o
 *.so
 *.beam
