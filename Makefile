@@ -6,6 +6,8 @@ top_builddir := `pwd`
 PACKAGE_VERNAME=json-0.0.1
 
 ERL=erl
+DIALYZER=dialyzer
+DIALYZER_FLAGS=
 erl_lib_dir := $(shell $(ERL) -noinput -eval 'io:format("~s",[code:lib_dir()]), init:stop()')
 
 INSTALL = install
@@ -26,10 +28,11 @@ check: test/etap.beam test/util.beam
 	  ./rebar eunit
 	ERL_FLAGS="-pa ./ebin" JSON_NIF_DIR=$(top_builddir)/priv \
 	  prove test/*.t
+	$(DIALYZER) $(DIALYZER_FLAGS) --build_plt --output_plt json.plt ebin/json.beam >json.log 2>&1 || { e=$$?; cat json.log; exit $$e; }
 
 clean:
 	./rebar clean
-	rm -f test/*.beam
+	rm -f test/*.beam json.plt json.log
 
 doc:
 	./rebar doc

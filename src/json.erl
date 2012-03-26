@@ -11,10 +11,10 @@
 -export_type([decode_options/0]).
 -export_type([encode_error/0]).
 -export_type([json_array/0]).
--export_type([json_array/1]).
+-export_type([json_array_t/1]).
 -export_type([json_number/0]).
 -export_type([json_object/0]).
--export_type([json_object/1]).
+-export_type([json_object_t/1]).
 -export_type([json_primary/0]).
 -export_type([json_string/0]).
 -export_type([key/0]).
@@ -29,8 +29,8 @@
 % ----------------------------------------------------------------------------
 
 -type value() :: json_primary()
-               | json_object([{key(), value()}])
-               | json_array(value()) .
+               | json_object_t([{key(), value()}])
+               | json_array_t(value()) .
 %% any type of json value.
 
 -type json_string()  :: unicode:unicode_binary().
@@ -47,16 +47,16 @@
 -type key() :: json_string() | atom().
 %% key of object value. key() is mostly binary(), but it may be in atom() depended on key_decode option.
 
--type json_object(Pairs) :: {Pairs}.
+-type json_object_t(Pairs) :: {Pairs}.
 %% json object value is represented in erlang tuple which contains single proplist style value.
 
--type json_object() :: json_object([{key(),value()}]).
+-type json_object() :: json_object_t([{key(),value()}]).
 %% json object.
 
--type json_array(T) :: [T].
+-type json_array_t(T) :: [T].
 %% json array value is represented in erlang array term.
 
--type json_array()  :: json_array(value()).
+-type json_array()  :: json_array_t(value()).
 %% json array value is represented in erlang array term.
 
 -type text()        :: unicode:chardata().
