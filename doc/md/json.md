@@ -78,17 +78,17 @@ see decode/2.
 
 
 
-<pre>json_array() = <a href="#type-json_array">json_array</a>(<a href="#type-value">value()</a>)</pre>
+<pre>json_array() = <a href="#type-json_array_t">json_array_t</a>(<a href="#type-value">value()</a>)</pre>
 
 
   json array value is represented in erlang array term.
 
 
-###<a name="type-json_array">json_array()</a>##
+###<a name="type-json_array_t">json_array_t()</a>##
 
 
 
-<pre>json_array(T) = [T]</pre>
+<pre>json_array_t(T) = [T]</pre>
 
 
   json array value is represented in erlang array term.
@@ -108,17 +108,17 @@ see decode/2.
 
 
 
-<pre>json_object() = <a href="#type-json_object">json_object</a>([{<a href="#type-key">key()</a>, <a href="#type-value">value()</a>}])</pre>
+<pre>json_object() = <a href="#type-json_object_t">json_object_t</a>([{<a href="#type-key">key()</a>, <a href="#type-value">value()</a>}])</pre>
 
 
   json object.
 
 
-###<a name="type-json_object">json_object()</a>##
+###<a name="type-json_object_t">json_object_t()</a>##
 
 
 
-<pre>json_object(Pairs) = {Pairs}</pre>
+<pre>json_object_t(Pairs) = {Pairs}</pre>
 
 
   json object value is represented in erlang tuple which contains single proplist style value.
@@ -168,7 +168,7 @@ see decode/2.
 
 
 
-<pre>value() = <a href="#type-json_primary">json_primary()</a> | <a href="#type-json_object">json_object</a>([{<a href="#type-key">key()</a>, <a href="#type-value">value()</a>}]) | <a href="#type-json_array">json_array</a>(<a href="#type-value">value()</a>)</pre>
+<pre>value() = <a href="#type-json_primary">json_primary()</a> | <a href="#type-json_object_t">json_object_t</a>([{<a href="#type-key">key()</a>, <a href="#type-value">value()</a>}]) | <a href="#type-json_array_t">json_array_t</a>(<a href="#type-value">value()</a>)</pre>
 
 
   any type of json value.<a name="index"></a>
