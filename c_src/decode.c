@@ -367,6 +367,12 @@ decode_bigval(Decoder* dec, const char* buf, long len)
         dec->badvals[dec->badvals_len] = term;
         ++ dec->badvals_len;
     }
+    /* drop object key */
+    if( dec->depth >= 0 )
+    {
+        assert(dec->stack[dec->depth] != NULL);
+        dec->stack[dec->depth]->key = THE_NON_VALUE;
+    }
     return OK;
 }
 
