@@ -406,7 +406,7 @@ decode_number(void* ctx, const char* buf, unsigned int len)
         return decode_bigval(dec, buf, len);
     }
 
-    /* next, try decoding as integer. */
+    /* next, try decoding as double. */
     dval = strtod(bufz, &endp);
     if( *endp == '\0' )
     {
