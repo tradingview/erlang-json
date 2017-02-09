@@ -370,17 +370,19 @@ encode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     yajl_gen_config config = {0, NULL};
     yajl_gen handle = yajl_gen_alloc(&config, NULL);
     yajl_gen_status status;
-    ERL_NIF_TERM ret = enif_make_badarg(env);
+    ERL_NIF_TERM ret;
     ErlNifBinary bin;
     const unsigned char* json;
     unsigned int jsonlen;
     
     if( argc != 2 )
     {
+        ret = enif_make_badarg(env);
         goto done;
     }
     if( !enif_is_list(env, argv[1]) )
     {
+        ret = enif_make_badarg(env);
         goto done;
     }
 
