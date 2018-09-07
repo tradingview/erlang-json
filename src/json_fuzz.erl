@@ -18,7 +18,7 @@ choose(_Depth, _Width, _State, Possible) ->
 
 
 choice(Possible) when is_list(Possible) ->
-    Idx = trunc(random:uniform() * length(Possible)),
+    Idx = trunc(rand:uniform() * length(Possible)),
     lists:nth(Idx+1, Possible).
 
 
@@ -27,7 +27,7 @@ value() ->
 
 character() ->
     % TODO: UTF-8 generation
-    trunc(random:uniform() * 128).
+    trunc(rand:uniform() * 128).
 
 string() ->
     process(string).

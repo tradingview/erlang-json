@@ -190,12 +190,48 @@ enc_map(Encoder* enc, ERL_NIF_TERM head, ERL_NIF_TERM tail)
 }
 
 int
+enc_erl_map(Encoder* enc, ERL_NIF_TERM map)
+{
+    ERL_NIF_TERM key, value;
+    ErlNifMapIterator iter;
+
+    if(yajl_gen_map_open(enc->handle) != yajl_gen_status_ok)
+    {
+        enc->error = enif_make_atom(enc->env, "failed_to_open_map");
+        return ERROR;
+    }
+
+    enif_map_iterator_create(enc->env, map, &iter, ERL_NIF_MAP_ITERATOR_FIRST);
+
+    while (enif_map_iterator_get_pair(enc->env, &iter, &key, &value)) {
+        if(enc_key(enc, key) != OK)
+        {
+            enif_map_iterator_destroy(enc->env, &iter);
+            return ERROR;
+        }
+        if(enc_json(enc, value) != OK) 
+        {
+            enif_map_iterator_destroy(enc->env, &iter);
+            return ERROR;
+        }
+        enif_map_iterator_next(enc->env, &iter);
+    }
+
+    enif_map_iterator_destroy(enc->env, &iter);
+
+    if(yajl_gen_map_close(enc->handle) != yajl_gen_status_ok)
+    {
+        enc->error = enif_make_atom(enc->env, "failed_to_close_map");
+        return ERROR;
+    }   
+    return OK;
+}
+
+int
 enc_json(Encoder* enc, ERL_NIF_TERM term)
 {
-    int ival;
-    unsigned int uival;
-    long lval;
-    unsigned long ulval;
+    ErlNifUInt64 ui64val;
+    ErlNifSInt64 i64val;
     double dval;
     ERL_NIF_TERM head;
     ERL_NIF_TERM tail;
@@ -212,41 +248,21 @@ enc_json(Encoder* enc, ERL_NIF_TERM term)
         return enc_binary(enc, term);
     }
     
-    if(enif_get_int(enc->env, term, &ival))
+	if(enif_get_int64(enc->env, term, &i64val))
     {
-        if(yajl_gen_integer(enc->handle, ival) != yajl_gen_status_ok)
+        if(yajl_gen_integer(enc->handle, i64val) != yajl_gen_status_ok)
         {
             enc->error = enif_make_atom(enc->env, "bad_integer");
             return ERROR;
         }
         return OK;
     }
-    
-    if(enif_get_uint(enc->env, term, &uival))
+
+    if(enif_get_uint64(enc->env, term, &ui64val))
     {
-        if(yajl_gen_integer(enc->handle, uival) != yajl_gen_status_ok)
+        if(yajl_gen_integer(enc->handle, ui64val) != yajl_gen_status_ok)
         {
             enc->error = enif_make_atom(enc->env, "bad_unsigned_integer");
-            return ERROR;
-        }
-        return OK;
-    }
-    
-    if(enif_get_long(enc->env, term, &lval))
-    {
-        if(yajl_gen_integer(enc->handle, lval) != yajl_gen_status_ok)
-        {
-            enc->error = enif_make_atom(enc->env, "bad_long");
-            return ERROR;
-        }
-        return OK;
-    }
-    
-    if(enif_get_ulong(enc->env, term, &ulval))
-    {
-        if(yajl_gen_integer(enc->handle, ulval) != yajl_gen_status_ok)
-        {
-            enc->error = enif_make_atom(enc->env, "bad_unsigned_long");
             return ERROR;
         }
         return OK;
@@ -307,6 +323,11 @@ enc_json(Encoder* enc, ERL_NIF_TERM term)
                 return enc_map(enc, head, tail);
             }
         }
+    }
+
+    if (enif_is_map(enc->env, term)) 
+    {
+        return enc_erl_map(enc, term);
     }
 
     /* find term from preencoded values. */
@@ -374,6 +395,8 @@ encode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
     ErlNifBinary bin;
     const unsigned char* json;
     unsigned int jsonlen;
+
+    memset(&enc, 0, sizeof(enc));
     
     if( argc != 2 )
     {
